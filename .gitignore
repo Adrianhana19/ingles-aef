@@ -1,0 +1,6 @@
+.DS_Store
+.claude/settings.local.json
+dist/
+shots/
+prof/
+__pycache__/
