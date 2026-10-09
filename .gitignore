@@ -1,6 +1,8 @@
-.DS_Store
-.claude/settings.local.json
-dist/
+# capturas y perfil temporal de Chrome de las pruebas
 shots/
 prof/
-__pycache__/
+dist/
+steps-*.json
+!steps-smoke.json
+.DS_Store
+.claude/

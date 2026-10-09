@@ -3,7 +3,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms)); const log=[];
 document.querySelector('[data-act="reto"]').click(); await sleep(400);
 for(let n=0;n<40;n++){
   if(document.querySelector('.result')) break;
-  const label=document.querySelector('.qtype span')?.textContent; const card=document.querySelector('.qcard');
+  const label=document.querySelector('.q-kicker span')?.textContent; const card=document.querySelector('.lesson-body');
   let kind='?';
   if(card.querySelector('.match')){ kind='match';
     for(const L of [...card.querySelectorAll('[data-l]')]){ L.click(); for(const R of [...card.querySelectorAll('[data-r]:not(.gone):not(.right)')]){ R.click(); await sleep(30); if(L.classList.contains('right')) break; } await sleep(300); } }
@@ -17,6 +17,6 @@ for(let n=0;n<40;n++){
   const nx=document.querySelector('#next'); if(!nx || nx.classList.contains('hidden')){ log.push('  !! no next button'); break; }
   nx.click(); await sleep(150);
 }
-log.push('RESULT: '+(document.querySelector('.result h1')?.textContent||'no result'));
+log.push('RESULT: '+(document.querySelector('.score')?.textContent||'no result'));
 return log.join('\n');
 })()

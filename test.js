@@ -14,3 +14,5 @@ let nw=0; for(const g of VOCAB){ for(const l of g.w.trim().split('\n')){ nw++; c
 const vs=IRREG.trim().split('\n'); vs.forEach(l=>{ if(l.split('|').length!==6){bad++;console.log('BAD verb',l);} });
 REG.trim().split('\n').forEach(l=>{ if(l.split('|').length!==4){bad++;console.log('BAD reg',l);} });
 console.log({topics:GRAMMAR.length, items:Object.values(counts).reduce((a,b)=>a+b), counts, groups:VOCAB.length, words:nw, irregular:vs.length, bad});
+
+process.exit(bad?1:0);

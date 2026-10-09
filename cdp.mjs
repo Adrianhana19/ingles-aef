@@ -20,9 +20,11 @@ fs.mkdirSync('shots',{recursive:true});
 const steps=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 await setSize(1280,900);
 for(const s of steps){
-  if(s.nav){ await send('Page.navigate',{url:s.nav}); await sleep(s.wait||1500); }
   if(s.size) await setSize(...s.size);
   if(s.dark!==undefined) await dark(s.dark);
+  if(s.nav){ await send('Page.navigate',{url:s.nav}); await sleep(s.wait||1500); }
+  if(s.offline!==undefined){ await send('Network.enable'); await send('Network.emulateNetworkConditions',{offline:!!s.offline,latency:0,downloadThroughput:-1,uploadThroughput:-1}); }
+  if(s.reload){ await send('Page.reload',{ignoreCache:false}); await sleep(s.reload); }
   if(s.js){ const v=await ev(s.js); console.log('JS>', s.label||'', typeof v==='string'?v.slice(0,1500):JSON.stringify(v).slice(0,1500)); }
   if(s.sleep) await sleep(s.sleep);
   if(s.shot) await shot(s.shot);
