@@ -12,6 +12,23 @@ Se publica como **PWA instalable** en GitHub Pages: el usuario la agrega a la pa
 
 Todo se escribe en español: la interfaz de la app, las respuestas al usuario y este archivo. El contenido en inglés es **inglés americano**. El contenido es original y sigue el temario de AEF; no copies textos del libro.
 
+## Ubicación y estado
+
+- **Código fuente y repositorio git:** `~/Proyectos/ingles-aef`. Siempre se trabaja aquí.
+- **App publicada:** https://adrianhana19.github.io/ingles-aef/
+  - Sale de la rama `main`, carpeta `docs/`, del repo público `Adrianhana19/ingles-aef`.
+  - El usuario la tiene instalada en el iPhone y el iPad con "Agregar a inicio".
+- **Firebase:**
+  - Proyecto `english-review-8adb3`, con autenticación por correo y contraseña y Firestore.
+  - Las reglas están en `firestore.rules` y ya están publicadas en la consola.
+  - La configuración pública está en `firebase-config.js`.
+  - La sincronización funciona: el usuario ya creó su cuenta.
+- **Copias que no se sincronizan:**
+  - `~/Desktop/ingles-aef.html` es la versión de un solo archivo que genera `build.py`.
+  - `~/Documents/Proyectos/English/ingles-aef.html` es una copia antigua.
+  - El progreso real del usuario está en la app web, sincronizado con Firebase.
+- **No cambies de forma incompatible** las claves de localStorage, los ids de los eventos ni las claves de las palabras (`w:grupo:palabra`): romperían el progreso sincronizado.
+
 ## Comandos
 
 ```bash
