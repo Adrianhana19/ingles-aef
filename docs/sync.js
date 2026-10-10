@@ -42,6 +42,7 @@ async function start(){
   St.SYNC.onCard = (k, v) => F.fs.setDoc(ref('meta', 'cards'), { c: { [k]: v } }, { merge: true }).catch(fail);
   St.SYNC.onSettings = s => F.fs.setDoc(ref('meta', 'settings'), s).catch(fail);
   St.SYNC.onReset = () => resetRemote();
+  St.SYNC.onImport = ({cards}) => pushImport(cards);
   await link();
   if (!Sync.user) return;
   unsubs.push(F.fs.onSnapshot(F.fs.collection(db, 'users', Sync.user.uid, 'days'), snap => {
@@ -52,7 +53,7 @@ async function start(){
   }, fail));
   unsubs.push(F.fs.onSnapshot(ref('meta', 'cards'), s => { if (s.exists() && St.mergeRemote({ cards: s.data().c || {} })) refresh(); }, fail));
   unsubs.push(F.fs.onSnapshot(ref('meta', 'settings'), s => { if (s.exists() && St.mergeRemote({ settings: s.data() })) refresh(); }, fail));
-  unsubs.push(F.fs.onSnapshot(ref('meta', 'base'), s => { if (s.exists()) { const b = s.data(); if (JSON.stringify(b) !== JSON.stringify(St.S.base)) { St.S.base = b; St.derive(); St.save(); refresh(); } } }, fail));
+  unsubs.push(F.fs.onSnapshot(ref('meta', 'base'), s => { if (s.exists() && !St.S.pendingBase) { const b = s.data(); if (JSON.stringify(b) !== JSON.stringify(St.S.base)) { St.S.base = b; St.derive(); St.save(); refresh(); } } }, fail));
   unsubs.push(F.fs.onSnapshot(ref('meta', 'state'), s => {
     const r = s.exists() ? s.data().resetAt || 0 : 0;
     if (r > (St.S.resetSeen || 0)) { St.resetAll(true); St.S.resetSeen = r; St.save(); saveUp({ uid: Sync.user.uid, ids: [] }); refresh(); }
@@ -76,10 +77,32 @@ async function link(){
       });
       St.S.linked = Object.assign({}, St.S.linked, { [uid]: Date.now() }); St.save();
     }
+    await applyPendingBase();
     await upload(pending());
     ok();
   } catch (e) { fail(e); }
   finally { linking = false; }
+}
+/* suma a la cuenta lo importado en este dispositivo (una sola vez gracias a base.imports) */
+async function applyPendingBase(){
+  const add = St.S.pendingBase; if (!add) return;
+  const merged = await F.fs.runTransaction(db, async tx => {
+    const bRef = ref('meta', 'base'); const b = await tx.get(bRef); const remote = b.exists() ? b.data() : {stat:{}, miss:{}, days:{}, until:''};
+    const done = new Set(remote.imports || []); const fresh = (add.imports || []).some(i => !done.has(i));
+    const next = fresh ? St.addBase(remote, add) : remote; if (fresh) tx.set(bRef, next); return next;
+  });
+  St.S.pendingBase = null; St.S.base = merged; St.derive(); St.save(); refresh();
+}
+async function pushImport(cards){
+  try {
+    await applyPendingBase();
+    if (Object.keys(cards || {}).length) await F.fs.runTransaction(db, async tx => {
+      const cRef = ref('meta', 'cards'); const c = await tx.get(cRef); const merged = { ...(c.exists() ? c.data().c || {} : {}) };
+      for (const k in cards) if (!merged[k] || (cards[k].u || 0) > (merged[k].u || 0)) merged[k] = cards[k];
+      tx.set(cRef, { c: merged });
+    });
+    await upload(pending()); ok();
+  } catch (e) { fail(e); }
 }
 async function upload(evs){
   if (!Sync.user || !evs.length) return;

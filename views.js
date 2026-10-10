@@ -712,7 +712,7 @@ function vSettings(){
   $$('[data-rate]').forEach(b=>b.onclick=()=>{ st.rate=+b.dataset.rate; touchSettings(); vSettings(); speak('This is the new speed.'); });
   $('#voice').onchange=e=>{ st.voice=e.target.value; touchSettings(); speak('Hello! This is my voice.'); };
   $('#exp').onclick=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(exportData())],{type:'application/json'})); a.download='progreso-ingles-'+TODAY+'.json'; a.click(); };
-  $('#imp').onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ try{ importData(JSON.parse(t)); applyTheme(); toast('Progreso importado'); vSettings(); updatePill(); }catch(err){ toast('Ese archivo no es una copia de esta app.'); } }); };
+  $('#imp').onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ let ok; try{ ok=importData(JSON.parse(t)); }catch(err){ toast('Ese archivo no es una copia de esta app.'); return; } applyTheme(); toast(ok?'Progreso importado':'Ese archivo ya se había importado; no se sumó de nuevo.'); vSettings(); updatePill(); }); };
   const rs=$('#reset'); rs.onclick=()=>{ if(rs.dataset.sure){ resetAll(); toast('Progreso reiniciado'); vSettings(); updatePill(); } else { rs.dataset.sure='1'; rs.querySelector('span').textContent='Toca otra vez para confirmar'; setTimeout(()=>{ if(rs.isConnected){ delete rs.dataset.sure; rs.querySelector('span').textContent='Reiniciar'; } },4000); } };
 }
 /* panel de cuenta: sync.js lo reemplaza con el formulario real */

@@ -2431,7 +2431,7 @@ delete S.stat; delete S.miss; delete S.days;
 const IMG = loadJSON(IMGKEY) || {};
 
 let SEQ = 0;
-const SYNC = {onEvents(){}, onCard(){}, onSettings(){}, onReset(){}};   // sync.js los reemplaza
+const SYNC = {onEvents(){}, onCard(){}, onSettings(){}, onReset(){}, onImport(){}};   // sync.js los reemplaza
 const evIds = new Set(S.ev.map(e=>e.i));
 
 function save(){ const {stat, miss, days, ...keep} = S; if(!saveJSON(KEY, keep)){ compact(60); saveJSON(KEY, (({stat,miss,days,...k})=>k)(S)); } }
@@ -2506,18 +2506,28 @@ function mergeRemote({events=[], cards={}, settings=null, base=null}={}){
 }
 /* suma una línea base a otra (para unir el progreso anterior de dos dispositivos) */
 function addBase(a, b){
-  const out = {stat:clone(a.stat), miss:{...(a.miss||{})}, days:clone(a.days), until:a.until||b.until||''};
+  const out = {stat:clone(a.stat), miss:{...(a.miss||{})}, days:clone(a.days), until:a.until||b.until||'', imports:[...new Set([...(a.imports||[]), ...(b.imports||[])])]};
   for(const k in b.stat||{}){ const s=out.stat[k]=out.stat[k]||{n:0,ok:0}; s.n+=b.stat[k].n; s.ok+=b.stat[k].ok; }
   for(const k in b.miss||{}) out.miss[k] = Math.max(out.miss[k]||0, b.miss[k]);
   for(const d in b.days||{}){ const x=b.days[d], o=out.days[d]=out.days[d]||blankDay(); o.q+=x.q||0; o.ok+=x.ok||0; o.cards=(o.cards||0)+(x.cards||0); o.tasks=Object.assign({}, o.tasks, x.tasks); }
   return out;
 }
 function exportData(){ const {stat, miss, days, ...keep} = S; return {app:'english-review', v:2, exported:new Date().toISOString(), ...keep}; }
+/* importa una copia exportada. Devuelve false si ese mismo archivo ya se había importado (no duplica números).
+   La parte importada queda en S.pendingBase hasta que sync.js la suma a la cuenta (aunque no haya internet en ese momento). */
 function importData(o){
-  if(o && o.v===2){ mergeRemote({events:o.ev||[], cards:o.cards||{}, settings:o.settings, base:null}); if(o.base) S.base = addBase(S.base, o.base); }
-  else if(o && (o.stat || o.days)){ S.base = addBase(S.base, {stat:o.stat, miss:o.miss, days:o.days}); Object.assign(S.cards, o.cards||{}); }
-  else throw new Error('formato');
-  derive(); save();
+  if(!o || !(o.v===2 || o.stat || o.days)) throw new Error('formato');
+  const id = 'imp-' + hashStr(JSON.stringify({stat:o.stat, days:o.days, base:o.base, ev:(o.ev||[]).map(e=>e.i)}))().toString(36);
+  if((S.base.imports||[]).includes(id)) return false;
+  let add = null; const cards = {};
+  if(o.v===2){ mergeRemote({events:o.ev||[], settings:o.settings, base:null}); if(o.base) add = {...o.base, until:''}; }
+  else add = {stat:o.stat||{}, miss:o.miss||{}, days:o.days||{}};
+  add = Object.assign(add || {stat:{}, miss:{}, days:{}}, {imports:[id]});
+  for(const k in o.cards||{}){ const c = {...o.cards[k], u:o.cards[k].u||1}; if(!S.cards[k] || (c.u||0) > (S.cards[k].u||0)){ S.cards[k] = c; cards[k] = c; } }
+  S.base = addBase(S.base, add);
+  S.pendingBase = S.pendingBase ? addBase(S.pendingBase, add) : add;
+  derive(); save(); SYNC.onImport({cards});
+  return true;
 }
 function resetAll(silent){ S.base={stat:{}, miss:{}, days:{}, until:''}; S.ev=[]; S.cards={}; S.snap=null; evIds.clear(); derive(); save(); if(!silent) SYNC.onReset(); }
 applyTheme();
@@ -3236,7 +3246,7 @@ function vSettings(){
   $$('[data-rate]').forEach(b=>b.onclick=()=>{ st.rate=+b.dataset.rate; touchSettings(); vSettings(); speak('This is the new speed.'); });
   $('#voice').onchange=e=>{ st.voice=e.target.value; touchSettings(); speak('Hello! This is my voice.'); };
   $('#exp').onclick=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(exportData())],{type:'application/json'})); a.download='progreso-ingles-'+TODAY+'.json'; a.click(); };
-  $('#imp').onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ try{ importData(JSON.parse(t)); applyTheme(); toast('Progreso importado'); vSettings(); updatePill(); }catch(err){ toast('Ese archivo no es una copia de esta app.'); } }); };
+  $('#imp').onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ let ok; try{ ok=importData(JSON.parse(t)); }catch(err){ toast('Ese archivo no es una copia de esta app.'); return; } applyTheme(); toast(ok?'Progreso importado':'Ese archivo ya se había importado; no se sumó de nuevo.'); vSettings(); updatePill(); }); };
   const rs=$('#reset'); rs.onclick=()=>{ if(rs.dataset.sure){ resetAll(); toast('Progreso reiniciado'); vSettings(); updatePill(); } else { rs.dataset.sure='1'; rs.querySelector('span').textContent='Toca otra vez para confirmar'; setTimeout(()=>{ if(rs.isConnected){ delete rs.dataset.sure; rs.querySelector('span').textContent='Reiniciar'; } },4000); } };
 }
 /* panel de cuenta: sync.js lo reemplaza con el formulario real */

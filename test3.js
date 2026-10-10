@@ -13,6 +13,7 @@ function makeStore(raw, today='2026-10-09'){
     ymd: d => d.toISOString().slice(0,10),
     parseYmd: s => { const [y,m,d]=s.split('-').map(Number); return new Date(Date.UTC(y,m-1,d)); },
     applyTheme: ()=>{},
+    hashStr: str => { let h=1779033703^str.length; for(let i=0;i<str.length;i++){ h=Math.imul(h^str.charCodeAt(i),3432918353); h=h<<13|h>>>19; } return ()=>{ h=Math.imul(h^h>>>16,2246822507); h=Math.imul(h^h>>>13,3266489909); return (h^=h>>>16)>>>0; }; },
   };
   env.addDays = (s,n) => { const d=env.parseYmd(s); d.setUTCDate(d.getUTCDate()+n); return env.ymd(d); };
   const api = new Function(...Object.keys(env), src + '\nreturn {S, record, markTask, mergeRemote, derive, compact, exportData, importData, setCard, addBase, setToday:t=>{}};')(...Object.values(env));
@@ -65,6 +66,16 @@ eq('compactar deja solo eventos recientes', C.S.ev.every(e=>e.day >= '2026-10-06
 const T = makeStore(null).api; T.markTask('reto'); T.markTask('reto');
 eq('una tarea se marca una sola vez', T.S.ev.filter(e=>e.task).length, 1);
 eq('lo guardado no incluye datos derivados', ['stat','miss','days'].some(k=>k in T.exportData()), false);
+
+/* 6) importar una copia de la versión anterior */
+const I = makeStore(null).api;
+I.record('2-1a#0', true, {tp:'2-1a'});
+const old = {stat:{'2-1a':{n:10,ok:8}}, miss:{'w:v-food:apple':2}, days:{'2026-10-05':{q:10,ok:8,tasks:{reto:true}}}, cards:{'w:v-food:apple':{b:3,due:'2026-10-12'}}};
+eq('importar devuelve true la primera vez', I.importData(old), true);
+eq('importar suma los temas a lo existente', I.S.stat['2-1a'], {n:11, ok:9});
+eq('importar trae los días, errores y flashcards', [I.S.days['2026-10-05'].q, I.S.miss['w:v-food:apple'], I.S.cards['w:v-food:apple'].b], [10, 2, 3]);
+eq('lo importado queda pendiente de subir a la cuenta', !!I.S.pendingBase, true);
+eq('importar el mismo archivo otra vez no duplica', [I.importData(old), I.S.stat['2-1a'].n], [false, 11]);
 
 console.log(fails ? `\n${fails} prueba(s) fallaron` : '\nTodas las pruebas pasan');
 process.exit(fails?1:0);
