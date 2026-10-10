@@ -1,7 +1,7 @@
 """Construye la app.
 
 - docs/  → versión web instalable (PWA) que publica GitHub Pages: index.html, manifest, service worker, íconos, sync.js
-- ~/Desktop/ingles-aef.html → versión de un solo archivo para abrir sin internet (sin PWA ni sincronización)
+- ingles-aef.html (en esta carpeta) → versión de un solo archivo para abrir sin internet (sin PWA ni sincronización)
 """
 import hashlib, json, pathlib, shutil
 
@@ -108,6 +108,6 @@ core += [f for f in ('sync.js', 'firebase-config.js') if (docs/f).exists()]
 (docs/'sw.js').write_text((d/'sw.template.js').read_text().replace('__VERSION__', version).replace('__CORE__', json.dumps(core)))
 
 # ---------- versión de un solo archivo ----------
-out = pathlib.Path.home()/'Desktop'/'ingles-aef.html'
+out = d/'ingles-aef.html'
 out.write_text(page(False))
 print(f'docs/ listo (versión {version}, {len(html)//1024} KB) · {out}')

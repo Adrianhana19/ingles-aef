@@ -14,7 +14,8 @@ Todo se escribe en español: la interfaz de la app, las respuestas al usuario y 
 
 ## Ubicación y estado
 
-- **Código fuente y repositorio git:** `~/Proyectos/ingles-aef`. Siempre se trabaja aquí.
+- **Todo el proyecto está en `~/Documents/Proyectos/English`**: el código fuente, el repositorio git y `docs/` (la app publicada). Siempre se trabaja aquí.
+- **`respaldos/`** (ignorada por git, porque son datos personales): exportaciones del progreso y la versión vieja del HTML.
 - **App publicada:** https://adrianhana19.github.io/ingles-aef/
   - Sale de la rama `main`, carpeta `docs/`, del repo público `Adrianhana19/ingles-aef`.
   - El usuario la tiene instalada en el iPhone y el iPad con "Agregar a inicio".
@@ -24,15 +25,14 @@ Todo se escribe en español: la interfaz de la app, las respuestas al usuario y 
   - La configuración pública está en `firebase-config.js`.
   - La sincronización funciona: el usuario ya creó su cuenta.
 - **Copias que no se sincronizan:**
-  - `~/Desktop/ingles-aef.html` es la versión de un solo archivo que genera `build.py`.
-  - `~/Documents/Proyectos/English/ingles-aef.html` es una copia antigua.
+  - `ingles-aef.html`, en la raíz, es la versión de un solo archivo que genera `build.py` (ignorada por git).
   - El progreso real del usuario está en la app web, sincronizado con Firebase.
 - **No cambies de forma incompatible** las claves de localStorage, los ids de los eventos ni las claves de las palabras (`w:grupo:palabra`): romperían el progreso sincronizado.
 
 ## Comandos
 
 ```bash
-python3 build.py      # genera docs/ (PWA para GitHub Pages) y ~/Desktop/ingles-aef.html (un solo archivo, sin PWA ni sync)
+python3 build.py      # genera docs/ (PWA para GitHub Pages) e ingles-aef.html (un solo archivo, sin PWA ni sync)
 node test.js          # valida los datos de gramática, vocabulario y verbos
 node test2.js         # valida los trabalenguas y los idioms, y prueba checkEs()
 node test3.js         # prueba el registro de eventos: fusión entre dispositivos, migración y compactación

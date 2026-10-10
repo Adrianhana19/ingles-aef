@@ -6,3 +6,6 @@ steps-*.json
 !steps-smoke.json
 .DS_Store
 .claude/
+# datos personales y copias locales (nunca al repositorio público)
+respaldos/
+ingles-aef.html
