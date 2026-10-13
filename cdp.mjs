@@ -25,6 +25,7 @@ for(const s of steps){
   if(s.nav){ await send('Page.navigate',{url:s.nav}); await sleep(s.wait||1500); }
   if(s.offline!==undefined){ await send('Network.enable'); await send('Network.emulateNetworkConditions',{offline:!!s.offline,latency:0,downloadThroughput:-1,uploadThroughput:-1}); }
   if(s.reload){ await send('Page.reload',{ignoreCache:false}); await sleep(s.reload); }
+  if(s.click){ const [x,y]=s.click; for(const type of ['mousePressed','mouseReleased']) await send('Input.dispatchMouseEvent',{type,x,y,button:'left',clickCount:1}); await sleep(s.after||300); }
   if(s.js){ const v=await ev(s.js); console.log('JS>', s.label||'', typeof v==='string'?v.slice(0,1500):JSON.stringify(v).slice(0,1500)); }
   if(s.sleep) await sleep(s.sleep);
   if(s.shot) await shot(s.shot);

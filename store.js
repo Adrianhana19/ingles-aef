@@ -13,6 +13,8 @@ const RAW = loadJSON(KEY) || {};
 const S = Object.assign({settings:{}, cards:{}, ev:[]}, RAW);
 S.settings = Object.assign({theme:'auto', cur:1, rate:0.9, daily:15, includeNext:false, voice:'', _u:0}, S.settings);
 if(!S.device) S.device = Math.random().toString(36).slice(2,8);
+/* la voz pasó a ser una preferencia de cada dispositivo (aef-review-voice); se migra una vez */
+try{ if(S.settings.voice && !localStorage.getItem('aef-review-voice')) localStorage.setItem('aef-review-voice', S.settings.voice); }catch(e){}
 /* migración v1 → v2: el progreso que ya tenías pasa a ser la línea base */
 if(!S.base) S.base = {stat:RAW.stat||{}, miss:RAW.miss||{}, days:RAW.days||{}, until:''};
 delete S.stat; delete S.miss; delete S.days;

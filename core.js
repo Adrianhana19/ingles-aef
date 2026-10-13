@@ -100,20 +100,58 @@ function checkTyped(input, answers){
   return {ok:false};
 }
 /* ---------- audio ---------- */
+/* VOZ:inicio — selección de voz (probada en test4.js sin navegador) */
 let VOICES=[];
+const VOICE_KEY='aef-review-voice';                       // la voz es por dispositivo: no se sincroniza
+const NOVELTY=/^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Wobble|Good News|Jester|Organ|Pipe Organ|Superstar|Trinoids|Whisper|Zarvox|Deranged|Hysterical)\b/i;
+const GOOD_VOICES=['Samantha','Ava','Allison','Susan','Alex','Tom','Evan','Nathan','Zoe','Joelle','Noelle','Aaron','Nicky'];
+const isGoodVoice = v => GOOD_VOICES.some(n => v.name===n || v.name.startsWith(n+' '));
+const isOnline = v => v.localService===false;
+function voiceRank(v){                                     // menor = mejor
+  const us = /en[-_]US/i.test(v.lang) ? 0 : 20;
+  if(isOnline(v)) return 300+us;
+  const gi = GOOD_VOICES.findIndex(n => v.name===n || v.name.startsWith(n+' '));
+  if(gi>=0) return us + gi + (/Premium|Enhanced|Mejorad/i.test(v.name) ? 0 : 50);   // las Premium/Enhanced primero
+  return 100+us;
+}
+function usableVoices(list=VOICES){ return list.filter(v=>/^en[-_]/i.test(v.lang) && !NOVELTY.test(v.name)).sort((a,b)=>voiceRank(a)-voiceRank(b)); }
+function myVoice(){ try{ return localStorage.getItem(VOICE_KEY)||''; }catch(e){ return ''; } }
+function setMyVoice(name){ try{ if(name) localStorage.setItem(VOICE_KEY, name); else localStorage.removeItem(VOICE_KEY); }catch(e){} }
+function pickVoice(skip=[]){ const u=usableVoices().filter(v=>!skip.includes(v.name)); const pref=myVoice(); return (pref && u.find(v=>v.name===pref)) || u[0]; }
+/* VOZ:fin */
 function loadVoices(){ if(!('speechSynthesis' in window)) return; VOICES = speechSynthesis.getVoices().filter(v=>/^en[-_]/i.test(v.lang)); }
 if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
-function pickVoice(){
-  if(S.settings.voice){ const v=VOICES.find(v=>v.name===S.settings.voice); if(v) return v; }
-  return VOICES.find(v=>/en[-_]US/i.test(v.lang) && /Samantha|Google US|Aria|Jenny|Allison|Ava/i.test(v.name)) || VOICES.find(v=>/en[-_]US/i.test(v.lang)) || VOICES[0];
-}
-function speak(text, slow){
-  if(!('speechSynthesis' in window)){ toast('Tu navegador no tiene voz disponible'); return; }
+let speakSeq = 0;
+/* habla en inglés. Evita los fallos de Chrome (speak justo tras cancel, sintetizador pausado) y,
+   si una voz falla, reintenta una vez con la siguiente. onResult({ok, voice, error}) es opcional. */
+function speak(text, slow, onResult){
+  if(!('speechSynthesis' in window)){ (onResult||(()=>toast('Este navegador no tiene voz disponible.')))({ok:false, error:'sin-voz'}); return; }
+  const synth = speechSynthesis, seq = ++speakSeq;
   const clean = String(text).replace(/<[^>]+>/g,'').replace(/\s*(→|↔)\s*/g,', ').replace(/\s\/\s/g,', ').replace(/\s–\s/g,', ').replace(/_+/g,'blank').replace(/\(.*?\)/g,'');
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(clean); u.lang='en-US'; const v=pickVoice(); if(v) u.voice=v;
-  u.rate = slow ? Math.max(0.5, S.settings.rate-0.3) : S.settings.rate;
-  speechSynthesis.speak(u);
+  const busy = synth.speaking || synth.pending;
+  if(busy) synth.cancel();
+  try{ synth.resume(); }catch(e){}
+  const attempt = (skip, n) => {
+    if(seq!==speakSeq) return;
+    if(!VOICES.length) loadVoices();
+    const v = pickVoice(skip);
+    const u = new SpeechSynthesisUtterance(clean); u.lang='en-US'; if(v) u.voice=v;
+    u.rate = slow ? Math.max(0.5, S.settings.rate-0.3) : S.settings.rate;
+    let settled = false;
+    const fail = err => {
+      if(settled || seq!==speakSeq) return; settled = true;
+      if(n<1 && v && err!=='not-allowed'){ synth.cancel(); setTimeout(()=>attempt(skip.concat(v.name), n+1), 80); return; }
+      if(onResult) onResult({ok:false, error:err, voice:v&&v.name});
+      else if(err!=='not-allowed') toast('No se pudo reproducir la voz ('+err+'). Revisa Ajustes → Voz.');
+    };
+    const timer = setTimeout(()=>{ if(!settled){ if(synth.speaking){ settled=true; onResult&&onResult({ok:true, voice:v&&v.name}); } else fail('no-empezó'); } }, 2500);
+    u.onstart = () => { clearTimeout(timer); if(settled) return; settled = true; onResult&&onResult({ok:true, voice:v&&v.name}); };
+    u.onerror = e => { clearTimeout(timer); if(e.error==='interrupted' || e.error==='canceled') return; fail(e.error||'error'); };
+    synth.speak(u);
+  };
+  const go = () => setTimeout(()=>attempt([],0), busy ? 80 : 0);
+  if(!VOICES.length){ loadVoices(); if(!VOICES.length){ let done=false; const ready=()=>{ if(done) return; done=true; loadVoices(); go(); }; synth.addEventListener('voiceschanged', ready, {once:true}); setTimeout(ready, 1000); return; } }
+  go();
 }
 const spk = (t, cls='icon-btn', label='') => `<button class="${cls}" data-say="${esc(t)}" title="Escuchar" aria-label="Escuchar">${ic('volume')}${label?`<span>${label}</span>`:''}</button>`;
 document.addEventListener('click', e => { const b=e.target.closest('[data-say]'); if(b){ e.stopPropagation(); speak(b.dataset.say, b.dataset.slow==='1'); } });

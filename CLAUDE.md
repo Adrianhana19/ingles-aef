@@ -35,7 +35,8 @@ Todo se escribe en español: la interfaz de la app, las respuestas al usuario y 
 python3 build.py      # genera docs/ (PWA para GitHub Pages) e ingles-aef.html (un solo archivo, sin PWA ni sync)
 node test.js          # valida los datos de gramática, vocabulario y verbos
 node test2.js         # valida los trabalenguas y los idioms, y prueba checkEs()
-node test3.js         # prueba el registro de eventos: fusión entre dispositivos, migración y compactación
+node test3.js         # prueba el registro de eventos: fusión entre dispositivos, migración, compactación e importación
+node test4.js         # prueba la elección de voz (pickVoice) con listas simuladas, incluida la de la Mac del usuario
 node imgs.js          # consulta Wikipedia y lista las palabras sin foto (necesita red)
 ./deploy.sh "mensaje" # build + pruebas + commit + push; Pages tarda 1–2 min en actualizar
 ```
@@ -55,10 +56,12 @@ Pasos que acepta `cdp.mjs`:
 - `dark`
 - `offline` (emula sin red)
 - `reload` (recarga y espera los ms indicados)
+- `click` (`[x,y]`: clic real del ratón; sirve para probar la voz, que exige un gesto del usuario)
 
 Notas sobre las pruebas:
 - `size` y `dark` se aplican **antes** de `nav`.
 - Borra `prof/` para no recibir la versión anterior desde la caché del service worker.
+- Si una ejecución falla a medias, puede quedar vivo un Chrome headless en el puerto 9333 y las pruebas siguientes se conectarían a él. Ciérralo con `pkill -f "user-data-dir=$PWD/prof"`.
 - `play.js` responde un reto completo; se pasa como `js`.
 - `?fecha=AAAA-MM-DD` simula otro día.
 
@@ -116,6 +119,13 @@ Archivos aparte de la IIFE:
 - Al conectar un dispositivo por primera vez, `link()` suma su línea base a la de la cuenta en una transacción y sube los eventos pendientes.
 - `firestore.rules` limita todo a `request.auth.uid == userId`.
 - La app expone `window.AppStore` y `window.AppUI` como puente hacia el módulo.
+
+**Voz (`core.js`, bloque `VOZ`).**
+- `pickVoice()` prefiere voces locales de buena calidad (primero las Premium/Enhanced), luego otras locales en `en-US`, y deja al final las voces de Google en línea, que en Chrome para Mac a menudo no suenan y no dan error.
+- Las voces de efectos (Bubbles, Zarvox…) se excluyen.
+- La voz elegida es **por dispositivo** (`localStorage['aef-review-voice']`) y no se sincroniza.
+- `speak()` evita los fallos de Chrome: no llama a `speak()` justo después de `cancel()`, llama a `resume()` y, si una voz falla, reintenta una vez con la siguiente. Acepta un callback opcional `onResult`, que usa el botón "Probar" de Ajustes.
+- `speechSynthesis` exige un gesto del usuario: lo que suena solo, sin un clic previo, puede devolver `not-allowed` y se ignora en silencio.
 
 **Variedad diaria determinista.**
 - `makeRng(semilla)` es un PRNG con semilla, y las semillas incluyen `TODAY`.

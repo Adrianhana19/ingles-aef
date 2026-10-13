@@ -33,7 +33,9 @@ if('serviceWorker' in navigator && (location.protocol==='https:' || location.hos
     reg.addEventListener('updatefound',()=>{ const w=reg.installing; w && w.addEventListener('statechange',()=>{ if(w.state==='installed' && navigator.serviceWorker.controller) ask(w); }); });
     document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reg.update(); });
   });
-  let reloaded=false; navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(!reloaded){ reloaded=true; location.reload(); } });
+  /* recarga solo al ACTUALIZAR (ya había un service worker); en la primera visita no hace falta */
+  const hadSW=!!navigator.serviceWorker.controller; let reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(hadSW && !reloaded){ reloaded=true; location.reload(); } });
 }
 </script>'''
 

@@ -680,7 +680,7 @@ function renderLog(){
 
 /* ================== AJUSTES ================== */
 function vSettings(){
-  const st=S.settings; loadVoices();
+  const st=S.settings; loadVoices(); const uv=usableVoices();
   const seg = (attr, cur, opts) => `<div class="seg">${opts.map(([k,l,icon])=>`<button class="${String(cur)===String(k)?'on':''}" ${attr}="${k}">${icon?ic(icon,16):''}<span>${l}</span></button>`).join('')}</div>`;
   app.innerHTML = `<div class="wrap page narrow">
   <button class="back" data-go="progreso">${ic('left',16)}<span>Progreso</span></button>
@@ -695,8 +695,10 @@ function vSettings(){
   <section class="settings block"><h2>Apariencia y voz</h2>
     <div class="setting"><div><b>Tema</b></div>${seg('data-theme-set', st.theme, [['auto','Sistema','monitor'],['light','Claro','sun'],['dark','Oscuro','moon']])}</div>
     <div class="setting"><div><b>Velocidad de la voz</b></div>${seg('data-rate', st.rate, [[0.7,'Lenta'],[0.9,'Normal'],[1.05,'Rápida']])}</div>
-    <div class="setting"><div><b>Voz en inglés</b><small>${VOICES.length} voces disponibles en este dispositivo.</small></div>
-      <div class="row"><select class="sel" id="voice"><option value="">Automática (en-US)</option>${VOICES.map(v=>`<option ${st.voice===v.name?'selected':''}>${esc(v.name)}</option>`).join('')}</select>${B('Probar','volume','ghost sm','data-say="Hello! Nice to meet you. How are you today?"')}</div></div>
+    <div class="setting"><div><b>Voz en inglés</b><small>Solo para este dispositivo. ${uv.length} voces disponibles.</small></div>
+      <div class="row"><select class="sel" id="voice"><option value="">Automática${uv[0]?` (${esc(uv[0].name)})`:''}</option>${uv.map(v=>`<option value="${esc(v.name)}" ${myVoice()===v.name?'selected':''}>${esc(v.name)}${isOnline(v)?' (en línea)':isGoodVoice(v)?' (recomendada)':''}</option>`).join('')}</select>${B('Probar','volume','ghost sm','id="vtest"')}</div></div>
+    <div id="vres"></div>
+    ${uv.some(v=>!isOnline(v)&&isGoodVoice(v))?'':`<p class="note">${ic('bulb',16)}<span>Para una voz más natural, descarga una gratis. En Mac: Ajustes del Sistema → Accesibilidad → Contenido leído → Voz del sistema → Gestionar voces → Inglés (EE. UU.) → <b>Ava (Premium)</b> o <b>Samantha</b>. En iPhone/iPad: Ajustes → Accesibilidad → Contenido leído → Voces → Inglés.</span></p>`}
   </section>
   <section class="settings block"><h2>Datos</h2>
     <div class="setting"><div><b>Copia de seguridad</b><small>Un archivo con todo tu progreso. Sirve también para pasarlo a otro dispositivo.</small></div>
@@ -705,12 +707,18 @@ function vSettings(){
   </section>
   <p class="muted small">Contenido original basado en el temario de American English File 3.ª ed. (AEF 1 y AEF 2). Fotos de Wikipedia y Wikimedia Commons. Voz del sistema.</p></div>`;
   renderSyncPanel();
+  if('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', ()=>{ loadVoices(); if(location.hash==='#ajustes' && usableVoices().length!==uv.length) vSettings(); }, {once:true});
   $$('[data-theme-set]').forEach(b=>b.onclick=()=>{ st.theme=b.dataset.themeSet; touchSettings(); applyTheme(); vSettings(); });
   $('#cur').onchange=e=>{ st.cur=+e.target.value; touchSettings(); toast('File actual: '+st.cur); };
   $$('[data-next]').forEach(b=>b.onclick=()=>{ st.includeNext=b.dataset.next==='1'; touchSettings(); vSettings(); });
   $$('[data-daily]').forEach(b=>b.onclick=()=>{ st.daily=+b.dataset.daily; touchSettings(); vSettings(); });
   $$('[data-rate]').forEach(b=>b.onclick=()=>{ st.rate=+b.dataset.rate; touchSettings(); vSettings(); speak('This is the new speed.'); });
-  $('#voice').onchange=e=>{ st.voice=e.target.value; touchSettings(); speak('Hello! This is my voice.'); };
+  const vtest=()=>{ const box=$('#vres'); box.innerHTML=`<p class="inline-msg">${ic('volume',16)}<span>Probando…</span></p>`;
+    speak('Hello! Nice to meet you. How are you today?', false, r=>{ if(!box.isConnected) return; box.innerHTML = r.ok
+      ? `<p class="inline-msg ok">${ic('check',16)}<span>Está sonando con <b>${esc(r.voice||'la voz del sistema')}</b>. Si no escuchas nada, revisa el volumen y por dónde sale el sonido (por ejemplo, unos AirPods conectados pero guardados).</span></p>`
+      : `<p class="inline-msg bad">${ic('alert',16)}<span>No se pudo reproducir (${esc(r.error)}). ${r.error==='not-allowed'?'Toca "Probar" otra vez.':'Elige otra voz de la lista y prueba de nuevo.'}</span></p>`; }); };
+  $('#vtest').onclick=vtest;
+  $('#voice').onchange=e=>{ setMyVoice(e.target.value); vtest(); };
   $('#exp').onclick=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(exportData())],{type:'application/json'})); a.download='progreso-ingles-'+TODAY+'.json'; a.click(); };
   $('#imp').onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ let ok; try{ ok=importData(JSON.parse(t)); }catch(err){ toast('Ese archivo no es una copia de esta app.'); return; } applyTheme(); toast(ok?'Progreso importado':'Ese archivo ya se había importado; no se sumó de nuevo.'); vSettings(); updatePill(); }); };
   const rs=$('#reset'); rs.onclick=()=>{ if(rs.dataset.sure){ resetAll(); toast('Progreso reiniciado'); vSettings(); updatePill(); } else { rs.dataset.sure='1'; rs.querySelector('span').textContent='Toca otra vez para confirmar'; setTimeout(()=>{ if(rs.isConnected){ delete rs.dataset.sure; rs.querySelector('span').textContent='Reiniciar'; } },4000); } };

@@ -2213,20 +2213,58 @@ function checkTyped(input, answers){
   return {ok:false};
 }
 /* ---------- audio ---------- */
+/* VOZ:inicio — selección de voz (probada en test4.js sin navegador) */
 let VOICES=[];
+const VOICE_KEY='aef-review-voice';                       // la voz es por dispositivo: no se sincroniza
+const NOVELTY=/^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Wobble|Good News|Jester|Organ|Pipe Organ|Superstar|Trinoids|Whisper|Zarvox|Deranged|Hysterical)\b/i;
+const GOOD_VOICES=['Samantha','Ava','Allison','Susan','Alex','Tom','Evan','Nathan','Zoe','Joelle','Noelle','Aaron','Nicky'];
+const isGoodVoice = v => GOOD_VOICES.some(n => v.name===n || v.name.startsWith(n+' '));
+const isOnline = v => v.localService===false;
+function voiceRank(v){                                     // menor = mejor
+  const us = /en[-_]US/i.test(v.lang) ? 0 : 20;
+  if(isOnline(v)) return 300+us;
+  const gi = GOOD_VOICES.findIndex(n => v.name===n || v.name.startsWith(n+' '));
+  if(gi>=0) return us + gi + (/Premium|Enhanced|Mejorad/i.test(v.name) ? 0 : 50);   // las Premium/Enhanced primero
+  return 100+us;
+}
+function usableVoices(list=VOICES){ return list.filter(v=>/^en[-_]/i.test(v.lang) && !NOVELTY.test(v.name)).sort((a,b)=>voiceRank(a)-voiceRank(b)); }
+function myVoice(){ try{ return localStorage.getItem(VOICE_KEY)||''; }catch(e){ return ''; } }
+function setMyVoice(name){ try{ if(name) localStorage.setItem(VOICE_KEY, name); else localStorage.removeItem(VOICE_KEY); }catch(e){} }
+function pickVoice(skip=[]){ const u=usableVoices().filter(v=>!skip.includes(v.name)); const pref=myVoice(); return (pref && u.find(v=>v.name===pref)) || u[0]; }
+/* VOZ:fin */
 function loadVoices(){ if(!('speechSynthesis' in window)) return; VOICES = speechSynthesis.getVoices().filter(v=>/^en[-_]/i.test(v.lang)); }
 if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
-function pickVoice(){
-  if(S.settings.voice){ const v=VOICES.find(v=>v.name===S.settings.voice); if(v) return v; }
-  return VOICES.find(v=>/en[-_]US/i.test(v.lang) && /Samantha|Google US|Aria|Jenny|Allison|Ava/i.test(v.name)) || VOICES.find(v=>/en[-_]US/i.test(v.lang)) || VOICES[0];
-}
-function speak(text, slow){
-  if(!('speechSynthesis' in window)){ toast('Tu navegador no tiene voz disponible'); return; }
+let speakSeq = 0;
+/* habla en inglés. Evita los fallos de Chrome (speak justo tras cancel, sintetizador pausado) y,
+   si una voz falla, reintenta una vez con la siguiente. onResult({ok, voice, error}) es opcional. */
+function speak(text, slow, onResult){
+  if(!('speechSynthesis' in window)){ (onResult||(()=>toast('Este navegador no tiene voz disponible.')))({ok:false, error:'sin-voz'}); return; }
+  const synth = speechSynthesis, seq = ++speakSeq;
   const clean = String(text).replace(/<[^>]+>/g,'').replace(/\s*(→|↔)\s*/g,', ').replace(/\s\/\s/g,', ').replace(/\s–\s/g,', ').replace(/_+/g,'blank').replace(/\(.*?\)/g,'');
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(clean); u.lang='en-US'; const v=pickVoice(); if(v) u.voice=v;
-  u.rate = slow ? Math.max(0.5, S.settings.rate-0.3) : S.settings.rate;
-  speechSynthesis.speak(u);
+  const busy = synth.speaking || synth.pending;
+  if(busy) synth.cancel();
+  try{ synth.resume(); }catch(e){}
+  const attempt = (skip, n) => {
+    if(seq!==speakSeq) return;
+    if(!VOICES.length) loadVoices();
+    const v = pickVoice(skip);
+    const u = new SpeechSynthesisUtterance(clean); u.lang='en-US'; if(v) u.voice=v;
+    u.rate = slow ? Math.max(0.5, S.settings.rate-0.3) : S.settings.rate;
+    let settled = false;
+    const fail = err => {
+      if(settled || seq!==speakSeq) return; settled = true;
+      if(n<1 && v && err!=='not-allowed'){ synth.cancel(); setTimeout(()=>attempt(skip.concat(v.name), n+1), 80); return; }
+      if(onResult) onResult({ok:false, error:err, voice:v&&v.name});
+      else if(err!=='not-allowed') toast('No se pudo reproducir la voz ('+err+'). Revisa Ajustes → Voz.');
+    };
+    const timer = setTimeout(()=>{ if(!settled){ if(synth.speaking){ settled=true; onResult&&onResult({ok:true, voice:v&&v.name}); } else fail('no-empezó'); } }, 2500);
+    u.onstart = () => { clearTimeout(timer); if(settled) return; settled = true; onResult&&onResult({ok:true, voice:v&&v.name}); };
+    u.onerror = e => { clearTimeout(timer); if(e.error==='interrupted' || e.error==='canceled') return; fail(e.error||'error'); };
+    synth.speak(u);
+  };
+  const go = () => setTimeout(()=>attempt([],0), busy ? 80 : 0);
+  if(!VOICES.length){ loadVoices(); if(!VOICES.length){ let done=false; const ready=()=>{ if(done) return; done=true; loadVoices(); go(); }; synth.addEventListener('voiceschanged', ready, {once:true}); setTimeout(ready, 1000); return; } }
+  go();
 }
 const spk = (t, cls='icon-btn', label='') => `<button class="${cls}" data-say="${esc(t)}" title="Escuchar" aria-label="Escuchar">${ic('volume')}${label?`<span>${label}</span>`:''}</button>`;
 document.addEventListener('click', e => { const b=e.target.closest('[data-say]'); if(b){ e.stopPropagation(); speak(b.dataset.say, b.dataset.slow==='1'); } });
@@ -2425,6 +2463,8 @@ const RAW = loadJSON(KEY) || {};
 const S = Object.assign({settings:{}, cards:{}, ev:[]}, RAW);
 S.settings = Object.assign({theme:'auto', cur:1, rate:0.9, daily:15, includeNext:false, voice:'', _u:0}, S.settings);
 if(!S.device) S.device = Math.random().toString(36).slice(2,8);
+/* la voz pasó a ser una preferencia de cada dispositivo (aef-review-voice); se migra una vez */
+try{ if(S.settings.voice && !localStorage.getItem('aef-review-voice')) localStorage.setItem('aef-review-voice', S.settings.voice); }catch(e){}
 /* migración v1 → v2: el progreso que ya tenías pasa a ser la línea base */
 if(!S.base) S.base = {stat:RAW.stat||{}, miss:RAW.miss||{}, days:RAW.days||{}, until:''};
 delete S.stat; delete S.miss; delete S.days;
@@ -3214,7 +3254,7 @@ function renderLog(){
 
 /* ================== AJUSTES ================== */
 function vSettings(){
-  const st=S.settings; loadVoices();
+  const st=S.settings; loadVoices(); const uv=usableVoices();
   const seg = (attr, cur, opts) => `<div class="seg">${opts.map(([k,l,icon])=>`<button class="${String(cur)===String(k)?'on':''}" ${attr}="${k}">${icon?ic(icon,16):''}<span>${l}</span></button>`).join('')}</div>`;
   app.innerHTML = `<div class="wrap page narrow">
   <button class="back" data-go="progreso">${ic('left',16)}<span>Progreso</span></button>
@@ -3229,8 +3269,10 @@ function vSettings(){
   <section class="settings block"><h2>Apariencia y voz</h2>
     <div class="setting"><div><b>Tema</b></div>${seg('data-theme-set', st.theme, [['auto','Sistema','monitor'],['light','Claro','sun'],['dark','Oscuro','moon']])}</div>
     <div class="setting"><div><b>Velocidad de la voz</b></div>${seg('data-rate', st.rate, [[0.7,'Lenta'],[0.9,'Normal'],[1.05,'Rápida']])}</div>
-    <div class="setting"><div><b>Voz en inglés</b><small>${VOICES.length} voces disponibles en este dispositivo.</small></div>
-      <div class="row"><select class="sel" id="voice"><option value="">Automática (en-US)</option>${VOICES.map(v=>`<option ${st.voice===v.name?'selected':''}>${esc(v.name)}</option>`).join('')}</select>${B('Probar','volume','ghost sm','data-say="Hello! Nice to meet you. How are you today?"')}</div></div>
+    <div class="setting"><div><b>Voz en inglés</b><small>Solo para este dispositivo. ${uv.length} voces disponibles.</small></div>
+      <div class="row"><select class="sel" id="voice"><option value="">Automática${uv[0]?` (${esc(uv[0].name)})`:''}</option>${uv.map(v=>`<option value="${esc(v.name)}" ${myVoice()===v.name?'selected':''}>${esc(v.name)}${isOnline(v)?' (en línea)':isGoodVoice(v)?' (recomendada)':''}</option>`).join('')}</select>${B('Probar','volume','ghost sm','id="vtest"')}</div></div>
+    <div id="vres"></div>
+    ${uv.some(v=>!isOnline(v)&&isGoodVoice(v))?'':`<p class="note">${ic('bulb',16)}<span>Para una voz más natural, descarga una gratis. En Mac: Ajustes del Sistema → Accesibilidad → Contenido leído → Voz del sistema → Gestionar voces → Inglés (EE. UU.) → <b>Ava (Premium)</b> o <b>Samantha</b>. En iPhone/iPad: Ajustes → Accesibilidad → Contenido leído → Voces → Inglés.</span></p>`}
   </section>
   <section class="settings block"><h2>Datos</h2>
     <div class="setting"><div><b>Copia de seguridad</b><small>Un archivo con todo tu progreso. Sirve también para pasarlo a otro dispositivo.</small></div>
@@ -3239,12 +3281,18 @@ function vSettings(){
   </section>
   <p class="muted small">Contenido original basado en el temario de American English File 3.ª ed. (AEF 1 y AEF 2). Fotos de Wikipedia y Wikimedia Commons. Voz del sistema.</p></div>`;
   renderSyncPanel();
+  if('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', ()=>{ loadVoices(); if(location.hash==='#ajustes' && usableVoices().length!==uv.length) vSettings(); }, {once:true});
   $$('[data-theme-set]').forEach(b=>b.onclick=()=>{ st.theme=b.dataset.themeSet; touchSettings(); applyTheme(); vSettings(); });
   $('#cur').onchange=e=>{ st.cur=+e.target.value; touchSettings(); toast('File actual: '+st.cur); };
   $$('[data-next]').forEach(b=>b.onclick=()=>{ st.includeNext=b.dataset.next==='1'; touchSettings(); vSettings(); });
   $$('[data-daily]').forEach(b=>b.onclick=()=>{ st.daily=+b.dataset.daily; touchSettings(); vSettings(); });
   $$('[data-rate]').forEach(b=>b.onclick=()=>{ st.rate=+b.dataset.rate; touchSettings(); vSettings(); speak('This is the new speed.'); });
-  $('#voice').onchange=e=>{ st.voice=e.target.value; touchSettings(); speak('Hello! This is my voice.'); };
+  const vtest=()=>{ const box=$('#vres'); box.innerHTML=`<p class="inline-msg">${ic('volume',16)}<span>Probando…</span></p>`;
+    speak('Hello! Nice to meet you. How are you today?', false, r=>{ if(!box.isConnected) return; box.innerHTML = r.ok
+      ? `<p class="inline-msg ok">${ic('check',16)}<span>Está sonando con <b>${esc(r.voice||'la voz del sistema')}</b>. Si no escuchas nada, revisa el volumen y por dónde sale el sonido (por ejemplo, unos AirPods conectados pero guardados).</span></p>`
+      : `<p class="inline-msg bad">${ic('alert',16)}<span>No se pudo reproducir (${esc(r.error)}). ${r.error==='not-allowed'?'Toca "Probar" otra vez.':'Elige otra voz de la lista y prueba de nuevo.'}</span></p>`; }); };
+  $('#vtest').onclick=vtest;
+  $('#voice').onchange=e=>{ setMyVoice(e.target.value); vtest(); };
   $('#exp').onclick=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(exportData())],{type:'application/json'})); a.download='progreso-ingles-'+TODAY+'.json'; a.click(); };
   $('#imp').onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ let ok; try{ ok=importData(JSON.parse(t)); }catch(err){ toast('Ese archivo no es una copia de esta app.'); return; } applyTheme(); toast(ok?'Progreso importado':'Ese archivo ya se había importado; no se sumó de nuevo.'); vSettings(); updatePill(); }); };
   const rs=$('#reset'); rs.onclick=()=>{ if(rs.dataset.sure){ resetAll(); toast('Progreso reiniciado'); vSettings(); updatePill(); } else { rs.dataset.sure='1'; rs.querySelector('span').textContent='Toca otra vez para confirmar'; setTimeout(()=>{ if(rs.isConnected){ delete rs.dataset.sure; rs.querySelector('span').textContent='Reiniciar'; } },4000); } };
@@ -3279,7 +3327,9 @@ if('serviceWorker' in navigator && (location.protocol==='https:' || location.hos
     reg.addEventListener('updatefound',()=>{ const w=reg.installing; w && w.addEventListener('statechange',()=>{ if(w.state==='installed' && navigator.serviceWorker.controller) ask(w); }); });
     document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reg.update(); });
   });
-  let reloaded=false; navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(!reloaded){ reloaded=true; location.reload(); } });
+  /* recarga solo al ACTUALIZAR (ya había un service worker); en la primera visita no hace falta */
+  const hadSW=!!navigator.serviceWorker.controller; let reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(hadSW && !reloaded){ reloaded=true; location.reload(); } });
 }
 </script>
 <script type="module" src="sync.js"></script>

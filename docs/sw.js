@@ -1,5 +1,5 @@
-/* Service worker de English Review. build.py reemplaza f5932ba103 y ["./", "index.html", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "sync.js", "firebase-config.js"]. */
-const V = 'er-f5932ba103';
+/* Service worker de English Review. build.py reemplaza c98963e262 y ["./", "index.html", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "sync.js", "firebase-config.js"]. */
+const V = 'er-c98963e262';
 const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "sync.js", "firebase-config.js"];
 
 self.addEventListener('install', e => {
