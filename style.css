@@ -477,3 +477,5 @@ body.focus .toast{top:calc(70px + var(--safe-t));bottom:auto}
 .tablewrap{position:relative}
 @media (max-width:640px){ .table th,.table td{padding:8px 10px} }
 .code-file{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.hbars.cover li{grid-template-columns:96px 1fr 92px 92px}
+@media (max-width:640px){ .hbars.cover li{grid-template-columns:80px 1fr 84px} .hbars.cover small{display:none} }

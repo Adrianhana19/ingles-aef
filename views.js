@@ -184,7 +184,10 @@ function startErrors(keys){
   startQuiz(shuffle(qs), {title:'Repaso de errores'});
 }
 function startTopicQuiz(id, n=10){
-  const t=TOPIC[id]; let qs = shuffle(t.parsed).map(it=>qFromItem(it));
+  const t=TOPIC[id], H=histNow();
+  /* primero lo no visto, luego lo visto de menor a mayor dominio */
+  const unseen = shuffle(t.parsed.filter(it=>!H[it.key])), seen = shuffle(t.parsed.filter(it=>H[it.key])).sort((a,b)=>mastery(H,a.key)-mastery(H,b.key));
+  let qs = unseen.concat(seen).map(it=>qFromItem(it));
   const extra = t.parsed.filter(it=>it.type==='t'||it.type==='o').map(it=>({...qFromItem(it, freeRng, false), kind:'listen', label:'Dictado: escribe lo que escuchas', answers:it.answers||[it.sentence], say:it.sentence, hint:it.es}));
   qs = qs.concat(shuffle(extra)).slice(0, n);
   startQuiz(qs, {title:`${unitLabel(t)} ${t.title}`, topic:id});
@@ -231,21 +234,25 @@ function vExercises(){
   <section class="block">
     <div class="block-head"><h2>Practicar por tema</h2>
       <div class="seg" role="tablist">${[['all','Todos'],['B','Base'],['1','A1++'],['2','A2']].map(([k,l])=>`<button class="${book===k?'on':''}" data-book="${k}">${l}</button>`).join('')}</div></div>
-    <div class="topics">${tps.map(t=>{ const a=acc(t.id); return `<button class="topic" data-topicq="${t.id}">
+    <div class="topics">${tps.map(t=>{ const H=histNow(), m=Math.round(mastery(H,t.id)*100), vis=t.parsed.filter(it=>H[it.key]).length; return `<button class="topic" data-topicq="${t.id}">
        <span class="unit">${unitLabel(t)}</span>
        <span class="topic-main"><b>${esc(t.title)}</b><small>${esc(t.es)}</small></span>
-       <span class="topic-side">${stChip(t.book,t.file)}<span class="meter" title="${a===null?'Sin practicar':Math.round(a*100)+'% de aciertos'}"><i style="width:${a===null?0:Math.round(a*100)}%"></i></span><small>${a===null?'Sin practicar':Math.round(a*100)+'%'}</small></span></button>`; }).join('')}</div>
+       <span class="topic-side">${stChip(t.book,t.file)}<span class="meter" title="Dominio ${m}%"><i style="width:${m}%"></i></span><small>${vis?`Dominio ${m}% · ${vis} de ${t.parsed.length} vistos`:`Sin ver · ${t.parsed.length} ejercicios`}</small></span></button>`; }).join('')}</div>
   </section></div>`;
   bindActs();
   $$('[data-book]').forEach(b=>b.onclick=()=>{ S.exBook=b.dataset.book; save(); vExercises(); });
   const all = () => eligibleTopics().flatMap(t=>t.parsed);
   const asListen = it => ({...qFromItem(it,freeRng,false), kind:'listen', label:'Dictado: escribe lo que escuchas', answers:it.answers||[it.sentence], say:it.sentence, hint:it.es});
-  $('#mMix').onclick=()=>{ const its=shuffle(all()).slice(0,7).map(it=>qFromItem(it)); const ws=shuffle(eligibleWords()).slice(0,2).map(w=>qVocab(w)); startQuiz(shuffle(its.concat(ws, [qVerb(pick(VERBS))])), {title:'Mezcla rápida'}); };
-  $('#mListen').onclick=()=>{ const its=shuffle(all().filter(i=>i.type==='t'||i.type==='o')).slice(0,7).map(asListen); const ws=shuffle(eligibleWords()).slice(0,3).map(w=>qVocab(w,freeRng,'listenword')); startQuiz(shuffle(its.concat(ws)), {title:'Listening'}); };
-  $('#mOrder').onclick=()=>{ const its=shuffle(all().filter(i=>i.type==='t'||i.type==='o')).slice(0,10).map(it=>({...qFromItem(it,freeRng,false), kind:'order', label:'Ordena la oración', words:tokens(it.sentence), sentence:it.sentence, hint:it.es})); startQuiz(its,{title:'Ordenar oraciones'}); };
-  $('#mErr').onclick=()=>startQuiz(shuffle(all().filter(i=>i.type==='e')).slice(0,10).map(it=>qFromItem(it)),{title:'Encontrar el error'});
-  $('#mTr').onclick=()=>startQuiz(shuffle(all().filter(i=>i.type==='t')).slice(0,10).map(it=>qFromItem(it,freeRng,false)),{title:'Traducción'});
-  $('#mVocab').onclick=()=>{ const ws=shuffle(eligibleWords()).slice(0,9); startQuiz(shuffle(ws.map(w=>qVocab(w))).concat([qMatch(shuffle(ws))]),{title:'Vocabulario mixto'}); };
+  /* todos los modos usan la misma regla: 70% nunca visto, 30% repaso según dominio */
+  const G = (n, f) => pickGrammar(eligibleTopics(), n, freeRng, new Set(), {}, f);
+  const W = n => pickMany(eligibleWords(), n, freeRng, wordOptions(hist(), snap().cb, {}));
+  const isTO = i => i.type==='t' || i.type==='o';
+  $('#mMix').onclick=()=>{ const its=G(7).map(it=>qFromItem(it)); const ws=W(2).map(w=>qVocab(w)); const vb=pickMany(VERBS,1,freeRng,verbOptions(hist(),{})).map(v=>qVerb(v)); startQuiz(shuffle(its.concat(ws, vb)), {title:'Mezcla rápida'}); };
+  $('#mListen').onclick=()=>{ const its=G(7, isTO).map(asListen); const ws=W(3).map(w=>qVocab(w,freeRng,'listenword')); startQuiz(shuffle(its.concat(ws)), {title:'Listening'}); };
+  $('#mOrder').onclick=()=>{ const its=G(10, isTO).map(it=>({...qFromItem(it,freeRng,false), kind:'order', label:'Ordena la oración', words:tokens(it.sentence), sentence:it.sentence, hint:it.es})); startQuiz(its,{title:'Ordenar oraciones'}); };
+  $('#mErr').onclick=()=>startQuiz(G(10, i=>i.type==='e').map(it=>qFromItem(it)),{title:'Encontrar el error'});
+  $('#mTr').onclick=()=>startQuiz(G(10, i=>i.type==='t').map(it=>qFromItem(it,freeRng,false)),{title:'Traducción'});
+  $('#mVocab').onclick=()=>{ const ws=W(9); startQuiz(shuffle(ws.map(w=>qVocab(w))).concat([qMatch(shuffle(ws))]),{title:'Vocabulario mixto'}); };
 }
 
 /* ================== MOTOR DEL QUIZ ================== */
@@ -614,6 +621,7 @@ function vProgress(){
     <div class="stat"><span class="stat-l">Días practicados</span><b>${daysN}</b><small>en total</small></div>
     <div class="stat"><span class="stat-l">Respuestas</span><b>${totQ.toLocaleString('es-SV')}</b><small>${pct(totOk,totQ)}% correctas</small></div>
   </section>
+  ${coverageBlock()}
   <div class="grid g2 block">
     <section class="panel">
       <div class="panel-head"><h3>Aciertos por semana</h3><span class="muted small">últimas 12 semanas</span></div>
@@ -660,6 +668,15 @@ function vProgress(){
   bindActs();
   const pr=$('#pracRep'); if(pr) pr.onclick=()=>startErrors([...new Set(rep.map(r=>r.k))].slice(0,15));
   renderLog();
+}
+/* cuánto contenido has visto y dominado (dominio ≥ 90%) */
+function coverageBlock(){
+  const H=histNow(), cb=Object.fromEntries(Object.entries(S.cards).map(([k,c])=>[k,c.b]));
+  const items=GRAMMAR.flatMap(t=>t.parsed), verbs=[...VERBS, ...REGS];
+  const row=(label, list, key, box) => { const seen=list.filter(x=>H[key(x)] || (box && cb[key(x)])).length; const dom=list.filter(x=>mastery(H,key(x),box?cb[key(x)]:0)>=0.9).length; const p=pct(seen,list.length);
+    return `<li><span>${label}</span><span class="hbar" title="${p}% visto"><i style="width:${p}%"></i></span><b>${seen} de ${list.length}</b><small class="muted">${dom} ${dom===1?'dominado':'dominados'}</small></li>`; };
+  return `<section class="panel block"><div class="panel-head"><h3>Contenido visto</h3><span class="muted small">el reto da prioridad a lo que aún no has visto</span></div>
+    <ul class="hbars cover">${row('Gramática', items, it=>it.key)}${row('Vocabulario', WORDS, w=>w.key, true)}${row('Verbos', verbs, v=>v.key)}</ul></section>`;
 }
 function renderLog(){
   const per=S.logPer||'30', typ=S.logType||'all', lim=S.logLim||30;

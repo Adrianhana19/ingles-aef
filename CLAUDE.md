@@ -37,6 +37,7 @@ node test.js          # valida los datos de gramática, vocabulario y verbos
 node test2.js         # valida los trabalenguas y los idioms, y prueba checkEs()
 node test3.js         # prueba el registro de eventos: fusión entre dispositivos, migración, compactación e importación
 node test4.js         # prueba la elección de voz (pickVoice) con listas simuladas, incluida la de la Mac del usuario
+node test5.js         # prueba el dominio y simula 30 días de reto: 70% nuevo, repaso espaciado, lo dominado casi no sale
 node imgs.js          # consulta Wikipedia y lista las palabras sin foto (necesita red)
 ./deploy.sh "mensaje" # build + pruebas + commit + push; Pages tarda 1–2 min en actualizar
 ```
@@ -127,9 +128,23 @@ Archivos aparte de la IIFE:
 - `speak()` evita los fallos de Chrome: no llama a `speak()` justo después de `cancel()`, llama a `resume()` y, si una voz falla, reintenta una vez con la siguiente. Acepta un callback opcional `onResult`, que usa el botón "Probar" de Ajustes.
 - `speechSynthesis` exige un gesto del usuario: lo que suena solo, sin un clic previo, puede devolver `not-allowed` y se ignora en silencio.
 
+**Selección y dominio (`core.js`, bloque `SELECCION`, funciones puras).**
+- **Historial:** `buildHistory(eventos, base, día)` arma un historial por unidad (ejercicio `tema#n`, tema, palabra, verbo) **solo con los días anteriores a hoy**: así el reto no cambia mientras se practica.
+  - `hist()` lo usa para elegir.
+  - `histNow()` incluye hoy y solo sirve para mostrar el avance.
+- **Dominio:** `mastery()` = aciertos en las últimas K respuestas / K (K: tema 10, ejercicio 3, palabra 4, verbo 4).
+  - La línea base (sin fechas) aporta hasta un 80%.
+  - En palabras también cuenta la caja de flashcards (5 = 100%).
+- **Probabilidad según dominio:** `masteryWeight()` vale 1 hasta 50% de dominio; luego `((1−m)/0,5)²`; mínimo 0,02 al 100%.
+- **Nuevo o repaso:** `pickNewOrReview()` elige lo nunca visto con probabilidad `NEW_RATIO` (0,7, acordado con el usuario) y, si no, repaso.
+  - El repaso pondera dominio × `recencyWeight` (nada de los últimos 2 días; peso completo a los 7).
+  - Si una de las dos listas está vacía, usa la otra.
+- **Errores pendientes:** van aparte. Hasta 3 al inicio del reto, por decisión del usuario.
+- **Dónde se aplica:** `buildDaily`, `dailyVerbs`, `dailyWords` (unas 7 nuevas y 3 de repaso), `topicOfDay` y los modos de Ejercicios (`pickGrammar` y `pickMany`). "Practicar este tema" muestra primero lo no visto.
+
 **Variedad diaria determinista.**
 - `makeRng(semilla)` es un PRNG con semilla, y las semillas incluyen `TODAY`.
-- `snap()` congela los errores y los aciertos al inicio del día, así el reto no cambia ese día.
+- `snap()` congela los errores pendientes y las cajas de flashcards al inicio del día, así el reto no cambia ese día.
 - `rot(arr, sal, off)` rota el trabalenguas y el idiom diarios sin repetir.
 
 **Preguntas y vistas.**

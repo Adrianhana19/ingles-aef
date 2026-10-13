@@ -257,65 +257,134 @@ function qFromKey(key, r=freeRng){
 }
 
 /* ---------- selección diaria ---------- */
-/* "foto" del progreso al inicio del día: así el mismo día siempre genera los mismos ejercicios */
+/* SELECCION:inicio — historial, dominio y elección "nuevo o repaso" (funciones puras, probadas en test5.js) */
+const MASTERY_K = {topic:10, item:3, word:4, verb:4};
+const NEW_RATIO = 0.7;                                     // 70% contenido nunca visto, 30% repaso
+const kOf = key => key.startsWith('w:') ? MASTERY_K.word : (key.startsWith('v:')||key.startsWith('r:')) ? MASTERY_K.verb : key.includes('#') ? MASTERY_K.item : MASTERY_K.topic;
+/* historial por unidad (ejercicio, tema, palabra, verbo) con los eventos de días ANTERIORES a hoy y la línea base */
+function buildHistory(events, base, today){
+  const H = {};
+  for(const k in (base && base.stat) || {}){ const st = base.stat[k]; if(st && st.n) H[k] = {n:st.n, last:'', recent:[], base:{n:st.n, ok:st.ok}}; }
+  const add = (k, ok, day) => { const h = H[k] = H[k] || {n:0, last:'', recent:[]}; h.n++; if(day > h.last) h.last = day; h.recent.push(ok ? 1 : 0); if(h.recent.length > 10) h.recent.shift(); };
+  const evs = (events || []).filter(e => !e.task && e.k && e.day < today).sort((a,b) => (a.day<b.day?-1:a.day>b.day?1:0) || a.t-b.t);
+  for(const e of evs){ add(e.k, e.ok, e.day); if(e.tp) add(e.tp, e.ok, e.day); }
+  return H;
+}
+/* dominio 0–1: aciertos en las últimas K respuestas / K (lo que falta para K cuenta como no logrado).
+   La línea base (sin fechas) aporta hasta un 80%. En palabras también cuenta la caja de flashcards (5 = 100%). */
+function mastery(H, key, box){
+  const h = H[key], K = kOf(key); let m = 0;
+  if(h){
+    const r = h.recent.slice(-K); m = r.reduce((a,b)=>a+b, 0) / K;
+    if(h.base && r.length < K) m += Math.min(K - r.length, h.base.n) * (h.base.ok / h.base.n) * 0.8 / K;
+  }
+  if(box) m = Math.max(m, box / 5);
+  return Math.min(1, m);
+}
+/* probabilidad según dominio: normal hasta 50%, luego baja en curva hasta casi nula al 100% */
+const masteryWeight = m => m <= 0.5 ? 1 : Math.max(0.02, Math.pow((1 - m) / 0.5, 2));
+const daysBetween = (a, b) => Math.round((Date.UTC(+b.slice(0,4), +b.slice(5,7)-1, +b.slice(8,10)) - Date.UTC(+a.slice(0,4), +a.slice(5,7)-1, +a.slice(8,10))) / 86400000);
+/* repaso espaciado: nada de los últimos 2 días; el peso sube hasta los 7 días */
+const recencyWeight = (last, today) => { if(!last) return 1; const d = daysBetween(last, today); return d <= 2 ? 0 : Math.min(1, (d - 2) / 5); };
+function weightedOf(list, f, r){ const ws = list.map(f); const tot = ws.reduce((a,b)=>a+b, 0); if(!(tot > 0)) return null; let x = r() * tot; for(let i=0;i<list.length;i++){ x -= ws[i]; if(x <= 0 && ws[i] > 0) return list[i]; } return list.filter((_,i)=>ws[i]>0).pop() || null; }
+/* elige un candidato: con probabilidad NEW_RATIO entre lo nunca visto, si no entre lo visto; si una lista no tiene opciones, usa la otra */
+function pickNewOrReview(cands, r, o){
+  const fresh = [], old = []; cands.forEach(c => (o.seen(c) ? old : fresh).push(c));
+  const wantNew = r() < (o.ratio ?? NEW_RATIO);
+  return (wantNew ? weightedOf(fresh, o.newW, r) : weightedOf(old, o.oldW, r)) || (wantNew ? weightedOf(old, o.oldW, r) : weightedOf(fresh, o.newW, r));
+}
+/* pesos para ejercicios de gramática: el tema reparte su peso entre sus ejercicios (nuevos o vistos) */
+function grammarOptions(tps, H, today, usedT, topicBase){
+  const per = {}; tps.forEach(t => { per[t.id] = {u:0, s:0}; t.parsed.forEach(it => H[it.key] ? per[t.id].s++ : per[t.id].u++); });
+  const div = t => 1 + (usedT[t.id] || 0) * 2;
+  return {
+    seen: it => !!H[it.key],
+    newW: it => { const t = TOPIC_OF(it); return topicBase(t) * Math.max(0.2, masteryWeight(mastery(H, t.id))) / (per[t.id].u || 1) / div(t); },
+    oldW: it => { const t = TOPIC_OF(it), h = H[it.key]; return topicBase(t) * masteryWeight(mastery(H, it.key)) * masteryWeight(mastery(H, t.id)) * recencyWeight(h && h.last, today) / (per[t.id].s || 1) / div(t); },
+  };
+}
+/* SELECCION:fin */
+const TOPIC_OF = it => TOPIC[it.topic];
+/* foto del inicio del día: errores pendientes y cajas de flashcards (así el reto no cambia mientras practicas) */
 function snap(){
-  if(!S.snap || S.snap.date!==TODAY){ S.snap={date:TODAY, miss:{...S.miss}, acc:Object.fromEntries(GRAMMAR.map(t=>[t.id,acc(t.id)]))}; save(); }
+  if(!S.snap || S.snap.date!==TODAY || !S.snap.cb){ S.snap={date:TODAY, miss:{...S.miss}, cb:Object.fromEntries(Object.entries(S.cards).map(([k,c])=>[k,c.b]))}; save(); }
   return S.snap;
 }
-function topicWeight(t){
-  const s=status(t.book,t.file); let w = s==='actual'?4 : s==='visto'?2.4 : s==='base'?1.4 : 0.8;
-  const a=snap().acc[t.id] ?? null; if(a!==null) w *= 1 + (1-a)*1.5; else w *= 1.15;
-  return w;
-}
+let HIST = null;
+function hist(){ if(!HIST || HIST.day!==TODAY || HIST.n!==S.ev.length || HIST.base!==S.base){ HIST = {day:TODAY, n:S.ev.length, base:S.base, H:buildHistory(S.ev, S.base, TODAY)}; } return HIST.H; }
+/* historial incluyendo hoy: solo para mostrar avance (vistos, dominio), no para elegir */
+let HISTNOW = null;
+function histNow(){ if(!HISTNOW || HISTNOW.n!==S.ev.length || HISTNOW.base!==S.base){ HISTNOW = {n:S.ev.length, base:S.base, H:buildHistory(S.ev, S.base, '9999-12-31')}; } return HISTNOW.H; }
+const topicBase = t => { const s=status(t.book,t.file); return s==='actual'?4 : s==='visto'?2.4 : s==='base'?1.4 : 0.8; };
+const wordBase = (w, M) => { const g=GROUP[w.g]; const s=status(g.book,g.file); return (s==='actual'?3:s==='visto'?2:1.2) * (M && M[w.key]?2:1); };
 function eligibleTopics(){ return GRAMMAR.filter(t=>eligible(t.book,t.file)); }
 function eligibleWords(){ return WORDS.filter(w=>{ const g=GROUP[w.g]; return eligible(g.book,g.file); }); }
 function eligibleVerbs(){ return VERBS; }
+function wordOptions(H, cb, M){
+  return { seen: w => !!H[w.key] || !!cb[w.key],
+    newW: w => wordBase(w, M),
+    oldW: w => wordBase(w, M) * masteryWeight(mastery(H, w.key, cb[w.key])) * recencyWeight(H[w.key] && H[w.key].last, TODAY) };
+}
+function verbOptions(H, M){
+  const b = v => (M && M[v.key] ? 3 : 1) * (v.lvl===1 ? 1.3 : 1);
+  return { seen: v => !!H[v.key], newW: b, oldW: v => b(v) * masteryWeight(mastery(H, v.key)) * recencyWeight(H[v.key] && H[v.key].last, TODAY) };
+}
+/* elige n sin repetir, aplicando la regla nuevo/repaso en cada elección */
+function pickMany(cands, n, r, o, used=new Set(), keyOf=c=>c.key){
+  const out = []; let pool = cands.filter(c=>!used.has(keyOf(c)));
+  while(out.length < n && pool.length){ const c = pickNewOrReview(pool, r, o); if(!c) break; out.push(c); used.add(keyOf(c)); pool = pool.filter(x=>x!==c); }
+  return out;
+}
+function pickGrammar(tps, n, r, used=new Set(), usedT={}, filter=()=>true){
+  const H = hist(), out = [];
+  let pool = tps.flatMap(t=>t.parsed).filter(it=>!used.has(it.key) && filter(it));
+  while(out.length < n && pool.length){
+    const it = pickNewOrReview(pool, r, grammarOptions(tps, H, TODAY, usedT, topicBase)); if(!it) break;
+    out.push(it); used.add(it.key); usedT[it.topic]=(usedT[it.topic]||0)+1; pool = pool.filter(x=>x!==it);
+  }
+  return out;
+}
 
 function buildDaily(){
-  const r = makeRng('reto:'+TODAY), N = S.settings.daily;
+  const r = makeRng('reto:'+TODAY), N = S.settings.daily, H = hist(), sp = snap(), M = sp.miss;
   const nG = Math.round(N*0.5), nV = Math.round(N*0.2), nB = Math.round(N*0.2);
-  const qs=[], usedT={}, used=new Set(), M=snap().miss;
-  const tps = eligibleTopics();
+  const qs=[], used=new Set(), usedT={};
   // errores pendientes primero (máx. 3)
   Object.keys(M).sort((a,b)=>M[b]-M[a] || (a<b?-1:1)).slice(0,3).forEach(k=>{ const q=qFromKey(k,r); if(q){ qs.push(q); used.add(k); } });
-  let guard=0;
-  while(qs.length < nG && guard++<400){
-    const t = weightedPick(tps, x=>topicWeight(x)/(1+(usedT[x.id]||0)*2), r);
-    const it = pick(t.parsed, r); if(used.has(it.key)) continue;
-    used.add(it.key); usedT[t.id]=(usedT[t.id]||0)+1; qs.push(qFromItem(it, r));
-  }
-  const ws = shuffle(eligibleWords(), r);
-  const wgt = w => { const g=GROUP[w.g]; const s=status(g.book,g.file); return (s==='actual'?3:s==='visto'?2:1.2) * (M[w.key]?2:1); };
-  const chosenW=[]; guard=0;
-  while(chosenW.length < nV && guard++<300){ const w=weightedPick(ws,wgt,r); if(!chosenW.includes(w) && !used.has(w.key)) chosenW.push(w); }
-  chosenW.forEach(w=>qs.push(qVocab(w,r)));
-  const vs = shuffle(eligibleVerbs(), r); const chosenV=[]; guard=0;
-  while(chosenV.length < nB && guard++<300){ const v=weightedPick(vs, v=>(M[v.key]?3:1)*(v.lvl===1?1.3:1), r); if(!chosenV.includes(v) && !used.has(v.key)) chosenV.push(v); }
-  chosenV.forEach((v,i)=> qs.push(i===0 && r()>0.5 ? qEd(pick(REGS,r),r) : qVerb(v,r)));
-  // emparejar con un grupo del día
-  const gw = shuffle(GROUP[pick(ws,r).g].words, r);
+  pickGrammar(eligibleTopics(), Math.max(0, nG - qs.length), r, used, usedT).forEach(it=>qs.push(qFromItem(it, r)));
+  const ws = eligibleWords();
+  pickMany(ws, nV, r, wordOptions(H, sp.cb, M), used).forEach(w=>qs.push(qVocab(w,r)));
+  const vs = pickMany(VERBS, nB, r, verbOptions(H, M), used);
+  vs.forEach((v,i)=>{ if(i===0 && r()>0.5){ const re = pickMany(REGS, 1, r, verbOptions(H, M), used)[0]; if(re){ qs.push(qEd(re,r)); return; } } qs.push(qVerb(v,r)); });
+  // emparejar: el grupo con más palabras sin ver
+  const unseenBy = {}; ws.forEach(w=>{ if(!H[w.key] && !sp.cb[w.key]) unseenBy[w.g]=(unseenBy[w.g]||0)+1; });
+  const gid = weightedOf(Object.keys(GROUP).filter(g=>ws.some(w=>w.g===g)), g=>1+(unseenBy[g]||0)*3, r) || pick(ws,r).g;
+  const gw = shuffle(GROUP[gid].words, r).sort((a,b)=>(!!H[a.key]||!!sp.cb[a.key]) - (!!H[b.key]||!!sp.cb[b.key]));
   const out = shuffle(qs, r).slice(0, N-2);
   out.splice(Math.floor(out.length/2), 0, qMatch(gw, r));
   const idw = idiomWord(r()<0.5 ? rot(IDS,'idioms') : pick(IDS, r));
   out.splice(Math.floor(out.length*0.8), 0, qIdiom(idw, r));
   return out;
 }
+/* flashcards del día: ~70% palabras nuevas y ~30% repaso de las pendientes (primero las de caja más baja) */
 function dailyWords(n=10){
-  const r = makeRng('words:'+TODAY);
-  const pool = eligibleWords();
+  const r = makeRng('words:'+TODAY), pool = eligibleWords();
   const due = pool.filter(w=>S.cards[w.key] && S.cards[w.key].due<=TODAY).sort((a,b)=>S.cards[a.key].b-S.cards[b.key].b);
-  const fresh = shuffle(pool.filter(w=>!S.cards[w.key]), r).sort((a,b)=>{ const sa=status(GROUP[a.g].book,GROUP[a.g].file), sb=status(GROUP[b.g].book,GROUP[b.g].file); const o={actual:0,visto:1,extra:2,base:2,proximo:3}; return o[sa]-o[sb]; });
-  // mezcla: hasta 6 por repasar + nuevas (mezcladas entre grupos)
+  const o={actual:0,visto:1,extra:2,base:2,proximo:3};
+  const fresh = shuffle(pool.filter(w=>!S.cards[w.key]), r).sort((a,b)=>o[status(GROUP[a.g].book,GROUP[a.g].file)]-o[status(GROUP[b.g].book,GROUP[b.g].file)]);
   const freshMix = shuffle(fresh.slice(0, 60), r);
-  return due.slice(0,6).concat(freshMix).slice(0,n);
+  const nDue = Math.min(due.length, Math.max(n - freshMix.length, Math.round(n*(1-NEW_RATIO))));
+  return shuffle(due.slice(0, nDue).concat(freshMix.slice(0, n - nDue)), r);
 }
 function dailyVerbs(n=5){
-  const r = makeRng('verbs:'+TODAY);
-  const M = snap().miss;
+  const r = makeRng('verbs:'+TODAY), M = snap().miss, H = hist();
   const miss = VERBS.filter(v=>M[v.key]).sort((a,b)=>M[b.key]-M[a.key]).slice(0,2);
-  return miss.concat(shuffle(VERBS.filter(v=>!miss.includes(v)), r)).slice(0,n);
+  return miss.concat(pickMany(VERBS, n - miss.length, r, verbOptions(H, M), new Set(miss.map(v=>v.key))));
 }
-function topicOfDay(){ const r=makeRng('topic:'+TODAY); return weightedPick(eligibleTopics(), topicWeight, r); }
+function topicOfDay(){
+  const r=makeRng('topic:'+TODAY), H=hist();
+  return weightedPick(eligibleTopics(), t=>{ const h=H[t.id]; const recent = h && h.last && daysBetween(h.last, TODAY) <= 3; return topicBase(t) * masteryWeight(mastery(H, t.id)) * (recent ? 0.3 : 1); }, r);
+}
 const INTERVAL=[0,1,2,4,8,16];
 /* comparación flexible en español: sin tildes, sin artículos, acepta cualquier opción separada por / o coma */
 function normEs(s){

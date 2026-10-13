@@ -57,7 +57,7 @@ form:[['i','persona + \'s + cosa: Ana\'s car = el carro de Ana'],['i','plural co
 uses:['En inglés no se dice "the car of Ana", se dice <b>Ana\'s car</b>.'],
 ex:[['This is my brother\'s room.','Este es el cuarto de mi hermano.'],['Whose phone is this?','¿De quién es este teléfono?'],['It\'s my mother\'s.','Es de mi mamá.']],
 errs:[['the car of my father','my father\'s car','Usa \'s para personas.'],['Who\'s bag is this?','Whose bag is this?','Whose = de quién; who\'s = who is.']],
-items:['m:This is [my sister\'s|my sisters|of my sister] bike.','m:[Whose|Who\'s|Who] jacket is this?','e:This is the *house of Luis>Luis\'s house*.','t:¿De quién es este libro? = Whose book is this?|Whose is this book?','t:Es el carro de mi papá. = It\'s my dad\'s car.|It is my dad\'s car.|It\'s my father\'s car.','o:Whose keys are these?']});
+items:['m:This is [my sister\'s|my sisters|of my sister] bike.','m:[Whose|Who\'s|Who] jacket is this?','e:This is *the house of Luis>Luis\'s house*.','t:¿De quién es este libro? = Whose book is this?|Whose is this book?','t:Es el carro de mi papá. = It\'s my dad\'s car.|It is my dad\'s car.|It\'s my father\'s car.','o:Whose keys are these?']});
 
 G({id:'B-4b',book:'B',file:4,title:'Prepositions of time: in / on / at',es:'Preposiciones de tiempo',
 form:[['i','AT + hora/momento: at 7:00, at night, at the weekend'],['i','ON + día/fecha: on Monday, on May 5th, on my birthday'],['i','IN + mes/año/estación/parte del día: in July, in 2024, in the summer, in the morning']],
