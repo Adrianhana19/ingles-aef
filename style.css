@@ -479,3 +479,29 @@ body.focus .toast{top:calc(70px + var(--safe-t));bottom:auto}
 .code-file{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .hbars.cover li{grid-template-columns:96px 1fr 92px 92px}
 @media (max-width:640px){ .hbars.cover li{grid-template-columns:80px 1fr 84px} .hbars.cover small{display:none} }
+
+/* ---------- números y verbos por letra ---------- */
+.g2x2{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:760px){ .g2x2{grid-template-columns:1fr} }
+.num-today{font-size:1.25rem;font-weight:800;margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.num-ex{list-style:none;margin:0 0 14px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm)}
+.num-ex li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:8px 12px}
+.num-ex li+li{border-top:1px solid var(--line)}
+.num-ex b{font-family:var(--mono);font-size:.9375rem;min-width:64px}
+.num-ex span{color:var(--ink-2);font-size:.9375rem}
+.num-ex .icon-btn{width:30px;height:30px}
+.num-big{font-family:var(--mono);font-size:3.25rem;font-weight:700;letter-spacing:-.01em;line-height:1.15;margin:8px 0 22px;overflow-wrap:anywhere}
+.num-inline{font-family:var(--mono);font-weight:700}
+.say-actions{gap:12px;margin-bottom:8px}
+.num-model{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-top:14px;background:var(--surface)}
+.num-say{font-size:1.375rem;font-weight:800;margin:2px 0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.self-check{margin-top:10px;gap:10px}
+.letters-panel{margin-top:14px;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;background:var(--surface)}
+.letters{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px}
+.letter{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;border:1.5px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-weight:800}
+.letter b{font-size:1.125rem}
+.letter small{font-size:.6875rem;color:var(--muted);font-weight:700;min-height:1em}
+.letter:hover:not(:disabled){transform:translate(-2px,-2px);box-shadow:var(--shadow)}
+.letter.on{background:var(--ink);color:var(--bg)} .letter.on small{color:var(--bg)}
+.letter:disabled{opacity:.3;cursor:not-allowed;border-style:dashed}
+@media (max-width:640px){ .num-big{font-size:2.5rem} }

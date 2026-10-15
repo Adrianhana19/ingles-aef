@@ -42,12 +42,13 @@ function codeBlock(t, lines=t.form){
     <ol class="code-body">${lines.map(([k,f])=>`<li class="cl-${k}"><span class="code-sign">${SIGN[k]}</span><span class="code-line">${k==='i'?`<span class="tk-c">${esc(f)}</span>`:hl(f)}</span></li>`).join('')}</ol></figure>`;
 }
 function keyLabel(k){
+  if(k.startsWith('n:')){ try{ const it=numFromKey(k); return 'Números · '+it.show; }catch(e){ return k; } }
   if(k.startsWith('w:')){ const w=WORD[k]; return w ? w.w : k; }
   if(k.startsWith('v:')){ const v=VERB[k]; return v ? `${v.b} (irregular)` : k; }
   if(k.startsWith('r:')) return k.slice(2)+' (-ed)';
   const t=TOPIC[k.split('#')[0]]; return t ? `${unitLabel(t)} ${t.title}` : k;
 }
-const keyKind = k => k.startsWith('w:') ? 'vocab' : (k.startsWith('v:')||k.startsWith('r:')) ? 'verbs' : 'grammar';
+const keyKind = k => k.startsWith('n:') ? 'numbers' : k.startsWith('w:') ? 'vocab' : (k.startsWith('v:')||k.startsWith('r:')) ? 'verbs' : 'grammar';
 
 /* tooltip para gráficas (cursor, foco o toque) */
 const tip = document.createElement('div'); tip.className='tip'; tip.setAttribute('role','tooltip'); document.body.appendChild(tip);
@@ -97,6 +98,7 @@ function vHome(){
   const hour = new Date().getHours(); const saludo = hour<12?'Buenos días':hour<19?'Buenas tardes':'Buenas noches';
   const curT = GRAMMAR.filter(t=>t.book===2 && t.file===S.settings.cur);
   const t = topicOfDay(), tw = rot(TW, 'tw', TWOFF), idm = rot(IDS, 'idioms'), dv = dailyVerbs();
+  const nt = todayNumber(), nr = makeRng('numcard:'+TODAY), nex = ['year','time','price'].map(k=>genNumber(k, nr)), nrule = NUM_KINDS[rot(Object.keys(NUM_KINDS), 'numrule')];
   const doneN = ['words','verbs','reto'].filter(k=>tasks[k]).length;
   const step = (n, k, title, desc, meta, act) => `<li class="step ${tasks[k]?'done':''}">
       <span class="step-n" aria-hidden="true">${tasks[k]?ic('check',16):n}</span>
@@ -126,7 +128,7 @@ function vHome(){
         ${step(3,'reto','Reto del día','Gramática, vocabulario, verbos e idioms. Primero salen tus errores pendientes.',`${S.settings.daily} preguntas`,'reto')}
       </ol>
     </section>
-    <div class="grid g3 block">
+    <div class="grid g2x2 block">
       <article class="panel">
         <div class="panel-head"><h3>Trabalenguas del día</h3><span class="tag">${esc(tw.snd)}</span></div>
         <p class="tw-text" id="twText">${tw.t.split(' ').map((x,i)=>`<span data-i="${i}">${esc(x)}</span>`).join(' ')}</p>
@@ -146,6 +148,15 @@ function vHome(){
         <div class="row">${B('Practicar idioms','target','primary sm','id="idQuiz"')}${B('Ver todos','right','ghost sm','data-go="vocabulario/v-idioms"')}</div>
       </article>
       <article class="panel">
+        <div class="panel-head"><h3>Números del día</h3><span class="tag">sobre todo en voz alta</span></div>
+        <p class="muted small" style="margin:0">Hoy es</p>
+        <p class="num-today">${esc(nt.show)} ${spk(nt.say)}</p>
+        <p class="small" style="margin:0 0 10px"><span class="muted">Se dice:</span> ${esc(nt.say)}</p>
+        <ul class="num-ex">${nex.map(it=>`<li><b>${esc(it.show)}</b><span>${esc(it.say)}</span>${spk(it.say)}</li>`).join('')}</ul>
+        <div class="row">${B('Practicar números','mic','primary sm','id="numGo"')}</div>
+        <p class="note">${ic('bulb',16)}<span><b>${esc(nrule.label)}:</b> ${esc(nrule.rule)}</span></p>
+      </article>
+      <article class="panel">
         <div class="panel-head"><h3>Tema del día</h3>${stChip(t.book,t.file)}</div>
         <p class="topic-name"><span class="unit">${unitLabel(t)}</span>${esc(t.title)}</p>
         <p class="muted small">${esc(t.es)}</p>
@@ -162,6 +173,7 @@ function vHome(){
   </div>`;
   bindActs();
   $('#twNext').onclick=()=>{ TWOFF++; vHome(); $('#twText').scrollIntoView({block:'center'}); };
+  $('#numGo').onclick=()=>startQuiz(buildNumberSession(makeRng('nums:'+TODAY)), {title:'Números del día'});
   const mic=$('#twMic'); if(mic) mic.onclick=()=>tryTwister(tw);
   $('#idQuiz').onclick=()=>{ const seen=[]; for(let k=0;k>-12;k--){ const x=rot(IDS,'idioms',k); if(!seen.includes(x)) seen.push(x); }
     const ws=shuffle(seen).slice(0,7).map(idiomWord); const qs=ws.map(w=>qIdiom(w)); qs.splice(3,0,qMatch(shuffle(ws)));
@@ -230,6 +242,7 @@ function vExercises(){
     ${mode('mTr','languages','Traducción','Del español al inglés')}
     ${mode('','history','Mis errores',`${Object.keys(S.miss).length} pendientes`,'data-act="errors"')}
     ${mode('mVocab','image','Vocabulario mixto','Imágenes y significados')}
+    ${mode('mNum','hash','Números','Años, fechas, horas y precios, en voz alta')}
   </div></section>
   <section class="block">
     <div class="block-head"><h2>Practicar por tema</h2>
@@ -252,6 +265,7 @@ function vExercises(){
   $('#mOrder').onclick=()=>{ const its=G(10, isTO).map(it=>({...qFromItem(it,freeRng,false), kind:'order', label:'Ordena la oración', words:tokens(it.sentence), sentence:it.sentence, hint:it.es})); startQuiz(its,{title:'Ordenar oraciones'}); };
   $('#mErr').onclick=()=>startQuiz(G(10, i=>i.type==='e').map(it=>qFromItem(it)),{title:'Encontrar el error'});
   $('#mTr').onclick=()=>startQuiz(G(10, i=>i.type==='t').map(it=>qFromItem(it,freeRng,false)),{title:'Traducción'});
+  $('#mNum').onclick=()=>startQuiz(buildNumberSession(freeRng), {title:'Números'});
   $('#mVocab').onclick=()=>{ const ws=W(9); startQuiz(shuffle(ws.map(w=>qVocab(w))).concat([qMatch(shuffle(ws))]),{title:'Vocabulario mixto'}); };
 }
 
@@ -290,6 +304,10 @@ function vQuiz(){
     const toks = [...q.pre.trim().split(' ').filter(Boolean).map(w=>({w,bad:false})), {w:q.bad, bad:true}, ...q.post.trim().split(' ').filter(Boolean).map(w=>({w,bad:false}))];
     q._toks=toks;
     body = `<div class="words">${toks.map((t,i)=>`<button data-t="${i}">${esc(t.w)}</button>`).join('')}</div>`;
+  } else if(q.kind==='say'){
+    body = `<div class="num-big">${esc(q.num.show)}</div>
+      <div class="row say-actions">${SR?B('Decirlo','mic','primary lg','id="sayMic"'):''}${B('Ver cómo se dice','volume','ghost lg','id="sayShow"')}</div>
+      <div id="sayRes"></div>`;
   } else if(q.kind==='match'){
     q._done=0; q._miss=0; q._sel=null;
     body = `<div class="match"><div class="opts">${q.left.map(a=>`<button class="opt" data-l="${esc(a)}"><span class="opt-txt">${esc(a)}</span></button>`).join('')}</div><div class="opts">${q.right.map(b=>`<button class="opt" data-r="${esc(b)}"><span class="opt-txt">${esc(b)}</span></button>`).join('')}</div></div>`;
@@ -299,7 +317,7 @@ function vQuiz(){
     <div class="wrap lesson-body">
       <p class="q-kicker"><span>${q.label}</span>${q.tag?`<span class="q-tag">${esc(q.tag)}</span>`:''}</p>
       ${body}
-      <div class="q-tools">${q.say && q.kind!=='listen' && !q.listen ? B('Escuchar','volume','text sm','id="sayBtn" disabled title="Disponible al responder"'):''}
+      <div class="q-tools">${q.say && q.kind!=='listen' && q.kind!=='say' && !q.listen ? B('Escuchar','volume','text sm','id="sayBtn" disabled title="Disponible al responder"'):''}
         ${q.topic?`<a class="btn text sm" href="#gramatica/${q.topic}" target="_blank" rel="noopener" title="Abre la estructura en otra pestaña">${ic('external',16)}<span>Ver estructura</span></a>`:''}
         ${q.kind==='mc'?'<span class="kbd-hint">Teclas 1–4</span>':''}</div>
     </div>
@@ -325,8 +343,8 @@ function vQuiz(){
   }
   if(q.kind==='type' || q.kind==='listen'){
     const inp=$('#ans'); setTimeout(()=>inp.focus(),50);
-    const doCheck=()=>{ if(Q.answered) return; const val=inp.value; const res=checkTyped(val, q.answers); inp.disabled=true; inp.classList.add(res.ok?'right':'wrong');
-      const shown = q.kind==='listen' ? q.say : (q.showAns || q.answers[0]);
+    const doCheck=()=>{ if(Q.answered) return; const val=inp.value; const res = q.num ? {ok:checkNumber(q.num, val), exact:true} : checkTyped(val, q.answers); inp.disabled=true; inp.classList.add(res.ok?'right':'wrong');
+      const shown = q.num ? (q.kind==='listen' ? `${q.num.show} (${q.num.say})` : q.num.say) : q.kind==='listen' ? q.say : (q.showAns || q.answers[0]);
       if(q.fill && $('#qp')) $('#qp').innerHTML = `${esc(q.fill.pre)}<span class="gap filled">${esc(q.answers[0])}</span>${esc(q.fill.post)}`;
       let msg = res.ok ? (res.exact?'':`Revisa la ortografía: <b>${esc(res.best)}</b>.`) : `La respuesta es <b>${esc(shown)}</b>.`;
       if(q.kind==='listen' && q.hint && res.ok) msg += ` <span class="muted">${esc(q.hint)}</span>`;
@@ -348,6 +366,32 @@ function vQuiz(){
     $$('[data-t]').forEach(b=>b.onclick=()=>{ if(Q.answered) return; const t=q._toks[+b.dataset.t]; const ok=t.bad;
       $$('[data-t]').forEach(x=>{ x.disabled=true; if(q._toks[+x.dataset.t].bad) x.classList.add('right'); }); if(!ok) b.classList.add('wrong');
       finish(ok, `<b>${esc(q.bad)}</b> → <b>${esc(q.fix||'')}</b>. ${esc(q.correct)}`, t.w, `${q.bad} → ${q.fix}`); });
+  }
+  if(q.kind==='say'){
+    const res=$('#sayRes'), it=q.num; let tries=0;
+    const others = it.alts.filter(a=>/[a-z]/i.test(a) && a!==it.say && !/^the /i.test(a) && !/^\w+ the /i.test(a)).slice(0,2);
+    const model = () => `<div class="num-model"><span class="muted small">Se dice</span><p class="num-say">${esc(it.say)} ${spk(it.say)}<button class="icon-btn" data-say="${esc(it.say)}" data-slow="1" title="Más lento" aria-label="Más lento">${ic('slow',18)}</button></p>${others.length?`<p class="muted small">También vale: ${others.map(esc).join(' · ')}</p>`:''}<p class="note">${ic('bulb',16)}<span>${esc(it.rule)}</span></p></div>`;
+    const done = () => { const a=$('.say-actions'); if(a) a.remove(); };
+    const self = () => { if(Q.answered) return; done(); res.innerHTML = model() + `<p class="small muted">¿Lo dijiste así?</p><div class="row self-check">${B('Lo dije bien','check','primary','id="selfOk"')}${B('Me equivoqué','x','ghost','id="selfBad"')}</div>`; speak(it.say);
+      $('#selfOk').onclick=()=>{ $('.self-check').remove(); finish(true, 'Autoevaluación.', 'autoevaluación', it.say); };
+      $('#selfBad').onclick=()=>{ $('.self-check').remove(); finish(false, `Se dice: <b>${esc(it.say)}</b>.`, 'autoevaluación', it.say); }; };
+    $('#sayShow').onclick = self;
+    const mic=$('#sayMic');
+    if(mic) mic.onclick=()=>{
+      if(Q.answered) return; if('speechSynthesis' in window) speechSynthesis.cancel();
+      let rec; try{ rec=new SR(); }catch(e){ return self(); }
+      rec.lang='en-US'; rec.interimResults=false; rec.maxAlternatives=5;
+      mic.disabled=true; mic.querySelector('span').textContent='Te escucho…';
+      rec.onresult=e=>{ const heard=[...e.results[0]].map(a=>a.transcript); const ok=heard.some(a=>checkNumber(it,a)); tries++;
+        const said = `Se entendió: “${esc(heard[0])}”.`;
+        if(ok){ done(); res.innerHTML = `<p class="inline-msg ok">${ic('check',16)}<span>${said}</span></p>` + model(); finish(true, 'Dijiste el número correcto. Compáralo con la forma recomendada.', heard[0], it.say); }
+        else if(tries<2){ res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${said} No coincide; inténtalo otra vez.</span></p>`; }
+        else { done(); res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${said}</span></p>` + model(); finish(false, `Se dice: <b>${esc(it.say)}</b>.`, heard[0], it.say); } };
+      rec.onerror=e=>{ const m = e.error==='not-allowed'||e.error==='service-not-allowed' ? 'Permite el uso del micrófono, o usa "Ver cómo se dice".' : e.error==='no-speech' ? 'No se escuchó nada. Inténtalo otra vez.' : e.error==='network' ? 'El reconocimiento de voz necesita internet. Usa "Ver cómo se dice".' : 'No se pudo usar el micrófono ('+esc(e.error)+'). Usa "Ver cómo se dice".';
+        res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${m}</span></p>`; };
+      rec.onend=()=>{ if(mic.isConnected){ mic.disabled=false; mic.querySelector('span').textContent='Decirlo'; } };
+      try{ rec.start(); }catch(e){ self(); }
+    };
   }
   if(q.kind==='match'){
     const pairOf = a => q.pairs.find(p=>p.a===a);
@@ -377,6 +421,7 @@ document.addEventListener('keydown', e=>{
   if(!SESSION.answered && /^[1-4a-dA-D]$/.test(e.key)){ const k = /\d/.test(e.key) ? +e.key-1 : 'abcd'.indexOf(e.key.toLowerCase()); const o=$$('.opt[data-o]')[k]; if(o){ e.preventDefault(); o.click(); } }
 });
 function reviewLine(q){
+  if(q.num) return `${esc(q.num.show)} → <b>${esc(q.num.say)}</b>`;
   if(q.kind==='match') return 'Emparejar palabras';
   if(q.kind==='err') return esc(q.correct);
   if(q.kind==='order' || q.kind==='listen') return esc(q.say);
@@ -530,7 +575,9 @@ function vVerbs(){
   app.innerHTML = `<div class="wrap page">${pageHead('Verbos','Irregulares en sus tres formas y regulares con la pronunciación de <i>-ed</i>.')}
   <section class="block"><div class="block-head"><h2>Verbos del día</h2>${B(day().tasks.verbs?'Repetir el quiz':'Quiz del día','target','primary sm','data-act="verbs"')}</div>
     <div class="vday">${dv.map(v=>`<div class="vday-i"><div class="row between"><b>${v.b}</b>${spk(v.b+', '+v.p+', '+v.pp)}</div><span class="forms">${esc(v.p)} <i>·</i> ${esc(v.pp)}</span><small class="muted">${esc(v.es)}</small></div>`).join('')}</div></section>
-  <section class="block"><div class="modes">${mode('qPast','left','Pasado','go → went')}${mode('qPP','check','Participio','go → gone')}${mode('qMix','grid','Mixto','Formas y significado')}${mode('qEd','headphones','Sonido de -ed','/t/, /d/ o /ɪd/')}</div></section>
+  <section class="block"><div class="modes">${mode('qPast','left','Pasado','go → went')}${mode('qPP','check','Participio','go → gone')}${mode('qMix','grid','Mixto','Formas y significado')}${mode('qEd','headphones','Sonido de -ed','/t/, /d/ o /ɪd/')}${mode('qLet','letter','Por letra','Elige una letra')}</div>
+    <div id="letPanel" class="letters-panel ${S.verbLetOpen?'':'hidden'}"><p class="small muted">Elige una letra: practicarás solo los verbos irregulares que empiezan con ella${f==='1'||f==='2'?` (filtro AEF ${f})`:''}.</p>
+      <div class="letters">${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(L=>{ const n=(f==='1'||f==='2'?VERBS.filter(v=>String(v.lvl)===f):VERBS).filter(v=>v.b[0].toUpperCase()===L).length; return `<button class="letter ${S.verbLetter===L?'on':''}" data-letter="${L}" ${n?'':'disabled'} title="${n} verbo(s)"><b>${L}</b><small>${n||''}</small></button>`; }).join('')}</div></div></section>
   <section class="block">
     <div class="block-head"><h2>Lista completa</h2><div class="seg">${[['all','Todos'],['1','AEF 1'],['2','AEF 2'],['reg','Regulares']].map(([k,l])=>`<button class="${f===k?'on':''}" data-vf="${k}">${l}</button>`).join('')}</div></div>
     <label class="search">${ic('search',18)}<input id="vq" type="search" placeholder="Buscar un verbo" value="${esc(S.verbQ||'')}" aria-label="Buscar verbo"></label>
@@ -553,6 +600,12 @@ function vVerbs(){
   $('#qPP').onclick=()=>startQuiz(shuffle(pool()).slice(0,10).map(v=>qVerb(v,freeRng,pick(['pp','mcpp']))),{title:'Quiz de participios'});
   $('#qMix').onclick=()=>startQuiz(shuffle(pool()).slice(0,12).map(v=>qVerb(v)),{title:'Quiz mixto de verbos'});
   $('#qEd').onclick=()=>startQuiz(shuffle(REGS).slice(0,10).map(v=>qEd(v)),{title:'Sonido de -ed'});
+  $('#qLet').onclick=()=>{ S.verbLetOpen=!S.verbLetOpen; save(); $('#letPanel').classList.toggle('hidden', !S.verbLetOpen); if(S.verbLetOpen) $('#letPanel').scrollIntoView({block:'nearest'}); };
+  $$('[data-letter]').forEach(b=>b.onclick=()=>{ const L=b.dataset.letter; S.verbLetter=L; save();
+    const vs = pool().filter(v=>v.b[0].toUpperCase()===L);
+    const chosen = pickMany(vs, 6, freeRng, verbOptions(hist(), {}));          // hasta 6 verbos (primero los no practicados), 2 preguntas cada uno
+    const qs=[]; chosen.forEach(v=>{ qs.push(qVerb(v,freeRng,'past')); qs.push(qVerb(v,freeRng,pick(['pp','mcpp','meaning']))); });
+    startQuiz(shuffle(qs).slice(0,12), {title:`Verbos con ${L}`}); });
 }
 
 /* ================== GRAMÁTICA ================== */
@@ -684,7 +737,7 @@ function renderLog(){
   const list = S.ev.filter(e=>!e.task && !e.ok && e.day>=from && (typ==='all' || keyKind(e.k)===typ)).sort((a,b)=>b.t-a.t);
   const seg = (attr, cur, opts) => `<div class="seg">${opts.map(([k,l])=>`<button class="${cur===k?'on':''}" ${attr}="${k}">${l}</button>`).join('')}</div>`;
   $('#logPanel').innerHTML = `<div class="panel-head"><h3>Registro de errores</h3><span class="muted small">${list.length} en el periodo</span></div>
-    <div class="row filters">${seg('data-per',per,[['7','7 días'],['30','30 días'],['all','Todo']])}${seg('data-typ',typ,[['all','Todo'],['grammar','Gramática'],['vocab','Vocabulario'],['verbs','Verbos']])}</div>
+    <div class="row filters">${seg('data-per',per,[['7','7 días'],['30','30 días'],['all','Todo']])}${seg('data-typ',typ,[['all','Todo'],['grammar','Gramática'],['vocab','Vocabulario'],['verbs','Verbos'],['numbers','Números']])}</div>
     ${list.length?`<ul class="log">${list.slice(0,lim).map(e=>`<li><time>${fmtTime(e.t)}</time><span class="log-k">${esc(keyLabel(e.k))}</span>
       <span class="log-a">${e.g?`<s class="bad-txt">${esc(e.g)}</s>`:'<span class="muted">sin respuesta</span>'}${e.x?` ${ic('right',14)} <b>${esc(e.x)}</b>`:''}</span></li>`).join('')}</ul>
       ${list.length>lim?B('Ver más','plus','ghost sm','id="logMore"'):''}${B('Practicar estos','target','primary sm','id="logPrac"')}`

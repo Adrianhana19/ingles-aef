@@ -250,6 +250,7 @@ function qEd(v, r=freeRng){
   return {key:v.key, tag:'Verbos regulares · -ed', kind:'mc', label:'¿Cómo suena la terminación -ed?', prompt:`<b>${v.p}</b> ${spk(v.p)} <span class="muted small">(${esc(v.es)})</span>`, opts:[L.t,L.d,L.id], ans:L[v.s], say:v.p, exp:'Regla: después de /t/ o /d/ → /ɪd/; después de sonidos sordos (p, k, s, sh, ch, f) → /t/; el resto → /d/.'};
 }
 function qFromKey(key, r=freeRng){
+  if(key.startsWith('n:')){ try{ return qNumber(numFromKey(key), 'listen'); }catch(e){ return null; } }
   if(key.startsWith('w:')){ const w=WORD[key]; return w ? qVocab(w,r) : null; }
   if(key.startsWith('v:')){ const v=VERB[key]; return v ? qVerb(v,r) : null; }
   if(key.startsWith('r:')){ const v=REGS.find(x=>x.key===key); return v ? qEd(v,r) : null; }
@@ -350,7 +351,7 @@ function buildDaily(){
   const nG = Math.round(N*0.5), nV = Math.round(N*0.2), nB = Math.round(N*0.2);
   const qs=[], used=new Set(), usedT={};
   // errores pendientes primero (máx. 3)
-  Object.keys(M).sort((a,b)=>M[b]-M[a] || (a<b?-1:1)).slice(0,3).forEach(k=>{ const q=qFromKey(k,r); if(q){ qs.push(q); used.add(k); } });
+  Object.keys(M).filter(k=>!k.startsWith('n:')).sort((a,b)=>M[b]-M[a] || (a<b?-1:1)).slice(0,3).forEach(k=>{ const q=qFromKey(k,r); if(q){ qs.push(q); used.add(k); } });
   pickGrammar(eligibleTopics(), Math.max(0, nG - qs.length), r, used, usedT).forEach(it=>qs.push(qFromItem(it, r)));
   const ws = eligibleWords();
   pickMany(ws, nV, r, wordOptions(H, sp.cb, M), used).forEach(w=>qs.push(qVocab(w,r)));

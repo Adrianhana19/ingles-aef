@@ -7,7 +7,7 @@ import hashlib, json, pathlib, shutil
 
 d = pathlib.Path(__file__).parent
 DATA = ['grammar1.js', 'grammar2.js', 'vocab.js', 'verbs.js', 'extras.js']   # constantes globales
-MODS = ['icons.js', 'core.js', 'store.js', 'views.js']                      # comparten un mismo ámbito (IIFE)
+MODS = ['icons.js', 'core.js', 'numbers.js', 'store.js', 'views.js']                      # comparten un mismo ámbito (IIFE)
 
 css = (d/'style.css').read_text()
 js = '\n'.join((d/f).read_text() for f in DATA)

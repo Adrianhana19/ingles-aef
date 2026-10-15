@@ -500,6 +500,32 @@ body.focus .toast{top:calc(70px + var(--safe-t));bottom:auto}
 .hbars.cover li{grid-template-columns:96px 1fr 92px 92px}
 @media (max-width:640px){ .hbars.cover li{grid-template-columns:80px 1fr 84px} .hbars.cover small{display:none} }
 
+/* ---------- números y verbos por letra ---------- */
+.g2x2{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:760px){ .g2x2{grid-template-columns:1fr} }
+.num-today{font-size:1.25rem;font-weight:800;margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.num-ex{list-style:none;margin:0 0 14px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm)}
+.num-ex li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:8px 12px}
+.num-ex li+li{border-top:1px solid var(--line)}
+.num-ex b{font-family:var(--mono);font-size:.9375rem;min-width:64px}
+.num-ex span{color:var(--ink-2);font-size:.9375rem}
+.num-ex .icon-btn{width:30px;height:30px}
+.num-big{font-family:var(--mono);font-size:3.25rem;font-weight:700;letter-spacing:-.01em;line-height:1.15;margin:8px 0 22px;overflow-wrap:anywhere}
+.num-inline{font-family:var(--mono);font-weight:700}
+.say-actions{gap:12px;margin-bottom:8px}
+.num-model{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-top:14px;background:var(--surface)}
+.num-say{font-size:1.375rem;font-weight:800;margin:2px 0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.self-check{margin-top:10px;gap:10px}
+.letters-panel{margin-top:14px;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;background:var(--surface)}
+.letters{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px}
+.letter{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;border:1.5px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);font-weight:800}
+.letter b{font-size:1.125rem}
+.letter small{font-size:.6875rem;color:var(--muted);font-weight:700;min-height:1em}
+.letter:hover:not(:disabled){transform:translate(-2px,-2px);box-shadow:var(--shadow)}
+.letter.on{background:var(--ink);color:var(--bg)} .letter.on small{color:var(--bg)}
+.letter:disabled{opacity:.3;cursor:not-allowed;border-style:dashed}
+@media (max-width:640px){ .num-big{font-size:2.5rem} }
+
 </style>
 </head>
 <body>
@@ -2107,6 +2133,8 @@ const ICONS = {
   minus:'<path d="M5 12h14"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  hash:'<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>',
+  letter:'<path d="M3 19 8 5h1l5 14M5 14h7"/><circle cx="18" cy="16" r="3"/><path d="M21 13v6"/>',
   mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
 };
 function ic(name, size=18, cls=''){
@@ -2365,6 +2393,7 @@ function qEd(v, r=freeRng){
   return {key:v.key, tag:'Verbos regulares · -ed', kind:'mc', label:'¿Cómo suena la terminación -ed?', prompt:`<b>${v.p}</b> ${spk(v.p)} <span class="muted small">(${esc(v.es)})</span>`, opts:[L.t,L.d,L.id], ans:L[v.s], say:v.p, exp:'Regla: después de /t/ o /d/ → /ɪd/; después de sonidos sordos (p, k, s, sh, ch, f) → /t/; el resto → /d/.'};
 }
 function qFromKey(key, r=freeRng){
+  if(key.startsWith('n:')){ try{ return qNumber(numFromKey(key), 'listen'); }catch(e){ return null; } }
   if(key.startsWith('w:')){ const w=WORD[key]; return w ? qVocab(w,r) : null; }
   if(key.startsWith('v:')){ const v=VERB[key]; return v ? qVerb(v,r) : null; }
   if(key.startsWith('r:')){ const v=REGS.find(x=>x.key===key); return v ? qEd(v,r) : null; }
@@ -2465,7 +2494,7 @@ function buildDaily(){
   const nG = Math.round(N*0.5), nV = Math.round(N*0.2), nB = Math.round(N*0.2);
   const qs=[], used=new Set(), usedT={};
   // errores pendientes primero (máx. 3)
-  Object.keys(M).sort((a,b)=>M[b]-M[a] || (a<b?-1:1)).slice(0,3).forEach(k=>{ const q=qFromKey(k,r); if(q){ qs.push(q); used.add(k); } });
+  Object.keys(M).filter(k=>!k.startsWith('n:')).sort((a,b)=>M[b]-M[a] || (a<b?-1:1)).slice(0,3).forEach(k=>{ const q=qFromKey(k,r); if(q){ qs.push(q); used.add(k); } });
   pickGrammar(eligibleTopics(), Math.max(0, nG - qs.length), r, used, usedT).forEach(it=>qs.push(qFromItem(it, r)));
   const ws = eligibleWords();
   pickMany(ws, nV, r, wordOptions(H, sp.cb, M), used).forEach(w=>qs.push(qVocab(w,r)));
@@ -2518,6 +2547,157 @@ function checkEs(input, es){
   return {ok:false};
 }
 function enAnswers(w){ return [w.w, ...w.w.split(/\s*(?:\/|→|↔|–)\s*/)].filter(Boolean); }
+
+/* ===================== NÚMEROS: cardinales, ordinales, años, fechas, horas y precios ===================== */
+/* NUM:inicio — funciones puras (probadas en test6.js). Cada número se describe como:
+   {kind, key:'n:<tipo>:<valor>', show (cómo se ve), say (forma recomendada), alts (todas las formas aceptadas), rule}  */
+const NUM_ONES = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+const NUM_TENS = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const NUM_KINDS = {
+  card:  {label:'Cantidades',  rule:'Los números grandes se leen por grupos: 3,500 → three thousand five hundred. En EE. UU. no se dice "and" (two hundred forty-five). Cuidado con 13 (thirTEEN, acento al final) y 30 (THIRty, acento al inicio).'},
+  ord:   {label:'Ordinales', rule:'Los ordinales casi siempre terminan en -th (fourth, twelfth), pero 1, 2 y 3 son especiales: first, second, third; también twenty-first, thirty-second. Se escriben 1st, 2nd, 3rd, 4th.'},
+  year:  {label:'Años',     rule:'Los años se dicen en dos partes: 19‖98 → nineteen ninety-eight. Si la segunda parte es 0X se dice "oh": 1905 → nineteen oh five. Del 2000 al 2009: two thousand five. Desde 2010: twenty ten, twenty twenty-six.'},
+  date:  {label:'Fechas',   rule:'En EE. UU. el mes va primero: 10/15/2026 es October 15th. El día se dice con ordinal (October fifteenth) y el año en dos partes (twenty twenty-six).'},
+  time:  {label:'Horas',    rule:'La forma más común es decir los números tal cual: 7:45 → seven forty-five; 10:05 → ten oh five. También: a quarter after/past (y cuarto), half past (y media), a quarter to (menos cuarto). Hora en punto: nine o\'clock.'},
+  price: {label:'Precios',  rule:'Los precios se dicen corto: $4.99 → four ninety-nine, o completo: four dollars and ninety-nine cents. $0.75 → seventy-five cents. $1,200 → twelve hundred dollars.'},
+};
+const under100 = n => n < 20 ? NUM_ONES[n] : NUM_TENS[Math.floor(n/10)] + (n%10 ? '-' + NUM_ONES[n%10] : '');
+const under1000 = (n, and) => { const h = Math.floor(n/100), r = n%100; return [h ? NUM_ONES[h] + ' hundred' : '', r ? (h && and ? 'and ' : '') + under100(r) : ''].filter(Boolean).join(' ') || 'zero'; };
+function numWords(n, and=false){
+  if(n === 0) return 'zero';
+  const parts = []; let rest = n;
+  for(const [v, name] of [[1e9,'billion'], [1e6,'million'], [1e3,'thousand']]) if(rest >= v){ parts.push(under1000(Math.floor(rest/v), and) + ' ' + name); rest %= v; }
+  if(rest) parts.push((parts.length && and && rest < 100 ? 'and ' : '') + under1000(rest, and));
+  return parts.join(' ');
+}
+function ordWords(n){
+  const w = numWords(n), m = w.match(/^(.*?)([a-z]+)$/), base = m[2];
+  const irr = {one:'first', two:'second', three:'third', five:'fifth', eight:'eighth', nine:'ninth', twelve:'twelfth'};
+  return m[1] + (irr[base] || (base.endsWith('y') ? base.slice(0,-1) + 'ieth' : base + 'th'));
+}
+const ordSuffix = n => (n%100 >= 11 && n%100 <= 13) ? 'th' : ({1:'st', 2:'nd', 3:'rd'}[n%10] || 'th');
+const commas = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+/* formas de decir un año; la primera es la recomendada */
+function yearWords(y){
+  const hi = Math.floor(y/100), lo = y%100, full = numWords(y);
+  if(y >= 2000 && y <= 2009) return lo ? [`two thousand ${NUM_ONES[lo]}`, `two thousand and ${NUM_ONES[lo]}`, `twenty oh ${NUM_ONES[lo]}`] : ['two thousand'];
+  if(y >= 2010 && y <= 2099) return [`twenty ${under100(lo)}`, `two thousand ${under100(lo)}`, `two thousand and ${under100(lo)}`];
+  if(lo === 0) return [`${under100(hi)} hundred`, full];
+  if(lo < 10) return [`${under100(hi)} oh ${NUM_ONES[lo]}`, `${under100(hi)} hundred and ${NUM_ONES[lo]}`, full];
+  return [`${under100(hi)} ${under100(lo)}`, full];
+}
+/* formas de decir una cantidad: con "a" en vez de "one" y, entre 1,100 y 9,900 redondos, "thirty-five hundred" */
+function cardWords(n){
+  const out = [numWords(n), numWords(n, true)];
+  if(n >= 1100 && n < 10000 && n % 100 === 0 && n % 1000 !== 0) out.push(under100(n/100) + ' hundred');
+  out.slice().forEach(w => { if(/^one (hundred|thousand|million)/.test(w)) out.push(w.replace(/^one /, 'a ')); });
+  return [...new Set(out)];
+}
+function makeNum(kind, value){
+  const K = NUM_KINDS[kind]; const it = {kind, key:`n:${kind}:${value}`, rule:K.rule, label:K.label};
+  if(kind === 'card'){ const n = +value; const w = cardWords(n); return {...it, show:commas(n), say:w[0], alts:[...w, String(n), commas(n)]}; }
+  if(kind === 'ord'){ const n = +value; return {...it, show:n + ordSuffix(n), say:ordWords(n), alts:[ordWords(n), n + ordSuffix(n), 'the ' + ordWords(n)]}; }
+  if(kind === 'year'){ const y = +value, w = yearWords(y); return {...it, show:String(y), say:w[0], alts:[...w, String(y)]}; }
+  if(kind === 'date'){
+    const [ymd, fmt] = value.split('|'), [y, mo, d] = ymd.split('-').map(Number), M = MONTHS[mo-1], yw = yearWords(y), o = ordWords(d);
+    const show = fmt === 's' ? `${mo}/${d}/${y}` : `${M} ${d}, ${y}`;
+    const alts = []; yw.concat(String(y)).forEach(Y => { alts.push(`${M} ${o} ${Y}`, `${M} the ${o} ${Y}`, `the ${o} of ${M} ${Y}`, `${M} ${d} ${Y}`, `${M} ${d}${ordSuffix(d)} ${Y}`); });
+    alts.push(`${mo}/${d}/${y}`);
+    return {...it, show, say:`${M} ${o}, ${yw[0]}`, alts};
+  }
+  if(kind === 'time'){
+    const [h, m] = value.split(':').map(Number), H = NUM_ONES[h], next = NUM_ONES[h % 12 + 1];
+    const alts = [`${h}:${String(m).padStart(2,'0')}`];
+    let say;
+    if(m === 0){ say = `${H} o'clock`; alts.push(say, H, `${h} o'clock`); }
+    else if(m < 10){ say = `${H} oh ${NUM_ONES[m]}`; alts.push(say, `${NUM_ONES[m]} after ${H}`, `${NUM_ONES[m]} past ${H}`); }
+    else { say = `${H} ${under100(m)}`; alts.push(say);
+      if(m === 15) alts.push(`a quarter after ${H}`, `quarter after ${H}`, `a quarter past ${H}`, `quarter past ${H}`);
+      else if(m === 30) alts.push(`half past ${H}`);
+      else if(m === 45) alts.push(`a quarter to ${next}`, `quarter to ${next}`, `a quarter of ${next}`);
+      else if(m < 30) alts.push(`${under100(m)} after ${H}`, `${under100(m)} past ${H}`);
+      else alts.push(`${under100(60-m)} to ${next}`); }
+    return {...it, show:`${h}:${String(m).padStart(2,'0')}`, say, alts};
+  }
+  if(kind === 'price'){
+    const cents = Math.round(+value * 100), D = Math.floor(cents/100), C = cents % 100;
+    const dw = D === 1 ? 'one dollar' : `${numWords(D)} dollars`, cw = C === 1 ? 'one cent' : `${under100(C)} cents`;
+    const show = '$' + commas(D) + (C ? '.' + String(C).padStart(2,'0') : '');
+    let say, alts = [show, show.replace(/,/g,''), (D + C/100).toFixed(2)];
+    if(!C){ say = dw; alts.push(dw, ...cardWords(D).map(w => w + (D === 1 ? ' dollar' : ' dollars'))); }
+    else if(!D){ say = cw; alts.push(cw); }
+    else { say = `${numWords(D)} ${C < 10 ? 'oh ' + NUM_ONES[C] : under100(C)}`; alts.push(say, `${dw} and ${cw}`, `${dw} ${cw}`); }
+    return {...it, show, say, alts};
+  }
+  throw new Error('tipo de número desconocido: ' + kind);
+}
+const numFromKey = key => { const [, kind, ...rest] = key.split(':'); return makeNum(kind, rest.join(':')); };
+/* normaliza lo que dice el micrófono o lo que escribes, para comparar sin importar la forma */
+function normNum(s){
+  return String(s).toLowerCase().replace(/[’‘`´]/g, "'")
+    .replace(/o'clock|o’clock|oclock/g, ' oclock ')
+    .replace(/(\d),(?=\d{3}\b)/g, '$1')
+    .replace(/(\d+)(st|nd|rd|th)\b/g, '$1')
+    .replace(/\$/g, ' ')
+    .replace(/(\d)[:.](\d)/g, '$1 $2').replace(/(\d)\/(\d)/g, '$1 $2')
+    .replace(/-/g, ' ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\b(and|the|of|dollars?|cents?|at|it's|its|is)\b/g, ' ')
+    .replace(/\ba\b/g, 'one').replace(/\bo\b/g, 'oh')
+    .replace(/\s+/g, ' ').trim();
+}
+function checkNumber(item, text){
+  const u = normNum(text); if(!u) return false;
+  return item.alts.some(a => normNum(a) === u) || normNum(item.show) === u;
+}
+/* genera un número de un tipo, con rangos pensados para A2 */
+function genNumber(kind, r){
+  const int = (a, b) => a + Math.floor(r() * (b - a + 1));
+  const pickOf = arr => arr[Math.floor(r() * arr.length)];
+  if(kind === 'card'){
+    const x = r();
+    const n = x < 0.2 ? (r() < 0.5 ? int(13,19) : int(3,9) * 10) : x < 0.4 ? int(21,99) : x < 0.6 ? int(101,999) : x < 0.8 ? (r() < 0.4 ? int(11,99) * 100 : int(1001,9999)) : x < 0.95 ? int(10,999) * 1000 + (r() < 0.5 ? 0 : int(1,999)) : int(1,9) * 1000000 + (r() < 0.5 ? 500000 : 0);
+    return makeNum('card', n);
+  }
+  if(kind === 'ord') return makeNum('ord', r() < 0.85 ? int(1,31) : pickOf([40, 50, 100]));
+  if(kind === 'year'){ const x = r(); return makeNum('year', x < 0.15 ? int(2000,2009) : x < 0.3 ? pickOf([1900, 1905, 1808, 1950, 2000, 1907, 1800]) : x < 0.65 ? int(1950,1999) : x < 0.9 ? int(2010,2035) : int(1800,1949)); }
+  if(kind === 'date'){ const y = r() < 0.6 ? int(1990,2030) : int(1950,1989), mo = int(1,12), d = int(1, [31,28,31,30,31,30,31,31,30,31,30,31][mo-1]);
+    return makeNum('date', `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}|${r() < 0.3 ? 's' : 'm'}`); }
+  if(kind === 'time') return makeNum('time', `${int(1,12)}:${String(r() < 0.75 ? pickOf([0,5,10,15,20,30,40,45,50,55]) : int(1,59)).padStart(2,'0')}`);
+  if(kind === 'price'){ const x = r(); const v = x < 0.15 ? int(5,95) / 100 : x < 0.35 ? int(1,99) : x < 0.85 ? int(1,49) + pickOf([0.99, 0.50, 0.25, 0.75, 0.05, int(1,98)/100]) : int(1,30) * 100; return makeNum('price', v.toFixed(2)); }
+}
+/* NUM:fin */
+/* fecha de hoy en inglés, con día de la semana (para la tarjeta de Hoy) */
+function todayNumber(){
+  const d = parseYmd(TODAY), it = makeNum('date', `${TODAY}|m`), wd = WEEKDAYS[d.getDay()];
+  return {...it, show:`${wd}, ${MONTHS[d.getMonth()]} ${d.getDate()}${ordSuffix(d.getDate())}, ${d.getFullYear()}`, say:`${wd}, ${it.say}`};
+}
+/* peso por tipo según cuánto fallas en él (eventos n:<tipo>:…) */
+function numKindWeights(){
+  const acc = {}; S.ev.forEach(e => { if(e.k && e.k.startsWith('n:')){ const k = e.k.split(':')[1]; const a = acc[k] = acc[k] || {n:0, ok:0}; a.n++; if(e.ok) a.ok++; } });
+  return Object.fromEntries(Object.keys(NUM_KINDS).map(k => [k, acc[k] && acc[k].n >= 3 ? 1 + (1 - acc[k].ok / acc[k].n) * 1.5 : 1.2]));
+}
+/* preguntas de números: oral (say), escuchar y escribir en dígitos (listen) o escribir en palabras (type) */
+function qNumber(item, mode){
+  const tag = 'Números · ' + item.label;
+  if(mode === 'say') return {key:item.key, tag, kind:'say', label:'Dilo en voz alta', num:item, say:item.say};
+  if(mode === 'listen') return {key:item.key, tag, kind:'listen', label:'Escucha y escribe el número (en cifras)', num:item, answers:[item.show], say:item.say, showAns:item.show};
+  return {key:item.key, tag, kind:'type', label:'Escríbelo en palabras', num:item, prompt:`<span class="num-inline">${esc(item.show)}</span>`, answers:[item.say], showAns:item.say, say:item.say, exp:item.rule};
+}
+function buildNumberSession(r, n=10){
+  const w = numKindWeights(), kinds = Object.keys(NUM_KINDS), out = [];
+  const oral = Math.round(n * 0.7);
+  for(let i = 0; i < n; i++){
+    const oralQ = i < oral;
+    const pool = oralQ ? kinds : kinds.filter(k => k !== 'date' && k !== 'ord');       // lo escrito: números, años, horas y precios
+    const kind = weightedPick(pool, k => w[k], r);
+    let item = genNumber(kind, r), guard = 0; while(out.some(q => q.key === item.key) && guard++ < 10) item = genNumber(kind, r);
+    out.push(qNumber(item, oralQ ? 'say' : (i === n - 1 ? 'type' : 'listen')));
+  }
+  return shuffle(out, r);
+}
 
 /* ===================== STORE: progreso basado en eventos =====================
    Fuente de verdad:
@@ -2687,12 +2867,13 @@ function codeBlock(t, lines=t.form){
     <ol class="code-body">${lines.map(([k,f])=>`<li class="cl-${k}"><span class="code-sign">${SIGN[k]}</span><span class="code-line">${k==='i'?`<span class="tk-c">${esc(f)}</span>`:hl(f)}</span></li>`).join('')}</ol></figure>`;
 }
 function keyLabel(k){
+  if(k.startsWith('n:')){ try{ const it=numFromKey(k); return 'Números · '+it.show; }catch(e){ return k; } }
   if(k.startsWith('w:')){ const w=WORD[k]; return w ? w.w : k; }
   if(k.startsWith('v:')){ const v=VERB[k]; return v ? `${v.b} (irregular)` : k; }
   if(k.startsWith('r:')) return k.slice(2)+' (-ed)';
   const t=TOPIC[k.split('#')[0]]; return t ? `${unitLabel(t)} ${t.title}` : k;
 }
-const keyKind = k => k.startsWith('w:') ? 'vocab' : (k.startsWith('v:')||k.startsWith('r:')) ? 'verbs' : 'grammar';
+const keyKind = k => k.startsWith('n:') ? 'numbers' : k.startsWith('w:') ? 'vocab' : (k.startsWith('v:')||k.startsWith('r:')) ? 'verbs' : 'grammar';
 
 /* tooltip para gráficas (cursor, foco o toque) */
 const tip = document.createElement('div'); tip.className='tip'; tip.setAttribute('role','tooltip'); document.body.appendChild(tip);
@@ -2742,6 +2923,7 @@ function vHome(){
   const hour = new Date().getHours(); const saludo = hour<12?'Buenos días':hour<19?'Buenas tardes':'Buenas noches';
   const curT = GRAMMAR.filter(t=>t.book===2 && t.file===S.settings.cur);
   const t = topicOfDay(), tw = rot(TW, 'tw', TWOFF), idm = rot(IDS, 'idioms'), dv = dailyVerbs();
+  const nt = todayNumber(), nr = makeRng('numcard:'+TODAY), nex = ['year','time','price'].map(k=>genNumber(k, nr)), nrule = NUM_KINDS[rot(Object.keys(NUM_KINDS), 'numrule')];
   const doneN = ['words','verbs','reto'].filter(k=>tasks[k]).length;
   const step = (n, k, title, desc, meta, act) => `<li class="step ${tasks[k]?'done':''}">
       <span class="step-n" aria-hidden="true">${tasks[k]?ic('check',16):n}</span>
@@ -2771,7 +2953,7 @@ function vHome(){
         ${step(3,'reto','Reto del día','Gramática, vocabulario, verbos e idioms. Primero salen tus errores pendientes.',`${S.settings.daily} preguntas`,'reto')}
       </ol>
     </section>
-    <div class="grid g3 block">
+    <div class="grid g2x2 block">
       <article class="panel">
         <div class="panel-head"><h3>Trabalenguas del día</h3><span class="tag">${esc(tw.snd)}</span></div>
         <p class="tw-text" id="twText">${tw.t.split(' ').map((x,i)=>`<span data-i="${i}">${esc(x)}</span>`).join(' ')}</p>
@@ -2791,6 +2973,15 @@ function vHome(){
         <div class="row">${B('Practicar idioms','target','primary sm','id="idQuiz"')}${B('Ver todos','right','ghost sm','data-go="vocabulario/v-idioms"')}</div>
       </article>
       <article class="panel">
+        <div class="panel-head"><h3>Números del día</h3><span class="tag">sobre todo en voz alta</span></div>
+        <p class="muted small" style="margin:0">Hoy es</p>
+        <p class="num-today">${esc(nt.show)} ${spk(nt.say)}</p>
+        <p class="small" style="margin:0 0 10px"><span class="muted">Se dice:</span> ${esc(nt.say)}</p>
+        <ul class="num-ex">${nex.map(it=>`<li><b>${esc(it.show)}</b><span>${esc(it.say)}</span>${spk(it.say)}</li>`).join('')}</ul>
+        <div class="row">${B('Practicar números','mic','primary sm','id="numGo"')}</div>
+        <p class="note">${ic('bulb',16)}<span><b>${esc(nrule.label)}:</b> ${esc(nrule.rule)}</span></p>
+      </article>
+      <article class="panel">
         <div class="panel-head"><h3>Tema del día</h3>${stChip(t.book,t.file)}</div>
         <p class="topic-name"><span class="unit">${unitLabel(t)}</span>${esc(t.title)}</p>
         <p class="muted small">${esc(t.es)}</p>
@@ -2807,6 +2998,7 @@ function vHome(){
   </div>`;
   bindActs();
   $('#twNext').onclick=()=>{ TWOFF++; vHome(); $('#twText').scrollIntoView({block:'center'}); };
+  $('#numGo').onclick=()=>startQuiz(buildNumberSession(makeRng('nums:'+TODAY)), {title:'Números del día'});
   const mic=$('#twMic'); if(mic) mic.onclick=()=>tryTwister(tw);
   $('#idQuiz').onclick=()=>{ const seen=[]; for(let k=0;k>-12;k--){ const x=rot(IDS,'idioms',k); if(!seen.includes(x)) seen.push(x); }
     const ws=shuffle(seen).slice(0,7).map(idiomWord); const qs=ws.map(w=>qIdiom(w)); qs.splice(3,0,qMatch(shuffle(ws)));
@@ -2875,6 +3067,7 @@ function vExercises(){
     ${mode('mTr','languages','Traducción','Del español al inglés')}
     ${mode('','history','Mis errores',`${Object.keys(S.miss).length} pendientes`,'data-act="errors"')}
     ${mode('mVocab','image','Vocabulario mixto','Imágenes y significados')}
+    ${mode('mNum','hash','Números','Años, fechas, horas y precios, en voz alta')}
   </div></section>
   <section class="block">
     <div class="block-head"><h2>Practicar por tema</h2>
@@ -2897,6 +3090,7 @@ function vExercises(){
   $('#mOrder').onclick=()=>{ const its=G(10, isTO).map(it=>({...qFromItem(it,freeRng,false), kind:'order', label:'Ordena la oración', words:tokens(it.sentence), sentence:it.sentence, hint:it.es})); startQuiz(its,{title:'Ordenar oraciones'}); };
   $('#mErr').onclick=()=>startQuiz(G(10, i=>i.type==='e').map(it=>qFromItem(it)),{title:'Encontrar el error'});
   $('#mTr').onclick=()=>startQuiz(G(10, i=>i.type==='t').map(it=>qFromItem(it,freeRng,false)),{title:'Traducción'});
+  $('#mNum').onclick=()=>startQuiz(buildNumberSession(freeRng), {title:'Números'});
   $('#mVocab').onclick=()=>{ const ws=W(9); startQuiz(shuffle(ws.map(w=>qVocab(w))).concat([qMatch(shuffle(ws))]),{title:'Vocabulario mixto'}); };
 }
 
@@ -2935,6 +3129,10 @@ function vQuiz(){
     const toks = [...q.pre.trim().split(' ').filter(Boolean).map(w=>({w,bad:false})), {w:q.bad, bad:true}, ...q.post.trim().split(' ').filter(Boolean).map(w=>({w,bad:false}))];
     q._toks=toks;
     body = `<div class="words">${toks.map((t,i)=>`<button data-t="${i}">${esc(t.w)}</button>`).join('')}</div>`;
+  } else if(q.kind==='say'){
+    body = `<div class="num-big">${esc(q.num.show)}</div>
+      <div class="row say-actions">${SR?B('Decirlo','mic','primary lg','id="sayMic"'):''}${B('Ver cómo se dice','volume','ghost lg','id="sayShow"')}</div>
+      <div id="sayRes"></div>`;
   } else if(q.kind==='match'){
     q._done=0; q._miss=0; q._sel=null;
     body = `<div class="match"><div class="opts">${q.left.map(a=>`<button class="opt" data-l="${esc(a)}"><span class="opt-txt">${esc(a)}</span></button>`).join('')}</div><div class="opts">${q.right.map(b=>`<button class="opt" data-r="${esc(b)}"><span class="opt-txt">${esc(b)}</span></button>`).join('')}</div></div>`;
@@ -2944,7 +3142,7 @@ function vQuiz(){
     <div class="wrap lesson-body">
       <p class="q-kicker"><span>${q.label}</span>${q.tag?`<span class="q-tag">${esc(q.tag)}</span>`:''}</p>
       ${body}
-      <div class="q-tools">${q.say && q.kind!=='listen' && !q.listen ? B('Escuchar','volume','text sm','id="sayBtn" disabled title="Disponible al responder"'):''}
+      <div class="q-tools">${q.say && q.kind!=='listen' && q.kind!=='say' && !q.listen ? B('Escuchar','volume','text sm','id="sayBtn" disabled title="Disponible al responder"'):''}
         ${q.topic?`<a class="btn text sm" href="#gramatica/${q.topic}" target="_blank" rel="noopener" title="Abre la estructura en otra pestaña">${ic('external',16)}<span>Ver estructura</span></a>`:''}
         ${q.kind==='mc'?'<span class="kbd-hint">Teclas 1–4</span>':''}</div>
     </div>
@@ -2970,8 +3168,8 @@ function vQuiz(){
   }
   if(q.kind==='type' || q.kind==='listen'){
     const inp=$('#ans'); setTimeout(()=>inp.focus(),50);
-    const doCheck=()=>{ if(Q.answered) return; const val=inp.value; const res=checkTyped(val, q.answers); inp.disabled=true; inp.classList.add(res.ok?'right':'wrong');
-      const shown = q.kind==='listen' ? q.say : (q.showAns || q.answers[0]);
+    const doCheck=()=>{ if(Q.answered) return; const val=inp.value; const res = q.num ? {ok:checkNumber(q.num, val), exact:true} : checkTyped(val, q.answers); inp.disabled=true; inp.classList.add(res.ok?'right':'wrong');
+      const shown = q.num ? (q.kind==='listen' ? `${q.num.show} (${q.num.say})` : q.num.say) : q.kind==='listen' ? q.say : (q.showAns || q.answers[0]);
       if(q.fill && $('#qp')) $('#qp').innerHTML = `${esc(q.fill.pre)}<span class="gap filled">${esc(q.answers[0])}</span>${esc(q.fill.post)}`;
       let msg = res.ok ? (res.exact?'':`Revisa la ortografía: <b>${esc(res.best)}</b>.`) : `La respuesta es <b>${esc(shown)}</b>.`;
       if(q.kind==='listen' && q.hint && res.ok) msg += ` <span class="muted">${esc(q.hint)}</span>`;
@@ -2993,6 +3191,32 @@ function vQuiz(){
     $$('[data-t]').forEach(b=>b.onclick=()=>{ if(Q.answered) return; const t=q._toks[+b.dataset.t]; const ok=t.bad;
       $$('[data-t]').forEach(x=>{ x.disabled=true; if(q._toks[+x.dataset.t].bad) x.classList.add('right'); }); if(!ok) b.classList.add('wrong');
       finish(ok, `<b>${esc(q.bad)}</b> → <b>${esc(q.fix||'')}</b>. ${esc(q.correct)}`, t.w, `${q.bad} → ${q.fix}`); });
+  }
+  if(q.kind==='say'){
+    const res=$('#sayRes'), it=q.num; let tries=0;
+    const others = it.alts.filter(a=>/[a-z]/i.test(a) && a!==it.say && !/^the /i.test(a) && !/^\w+ the /i.test(a)).slice(0,2);
+    const model = () => `<div class="num-model"><span class="muted small">Se dice</span><p class="num-say">${esc(it.say)} ${spk(it.say)}<button class="icon-btn" data-say="${esc(it.say)}" data-slow="1" title="Más lento" aria-label="Más lento">${ic('slow',18)}</button></p>${others.length?`<p class="muted small">También vale: ${others.map(esc).join(' · ')}</p>`:''}<p class="note">${ic('bulb',16)}<span>${esc(it.rule)}</span></p></div>`;
+    const done = () => { const a=$('.say-actions'); if(a) a.remove(); };
+    const self = () => { if(Q.answered) return; done(); res.innerHTML = model() + `<p class="small muted">¿Lo dijiste así?</p><div class="row self-check">${B('Lo dije bien','check','primary','id="selfOk"')}${B('Me equivoqué','x','ghost','id="selfBad"')}</div>`; speak(it.say);
+      $('#selfOk').onclick=()=>{ $('.self-check').remove(); finish(true, 'Autoevaluación.', 'autoevaluación', it.say); };
+      $('#selfBad').onclick=()=>{ $('.self-check').remove(); finish(false, `Se dice: <b>${esc(it.say)}</b>.`, 'autoevaluación', it.say); }; };
+    $('#sayShow').onclick = self;
+    const mic=$('#sayMic');
+    if(mic) mic.onclick=()=>{
+      if(Q.answered) return; if('speechSynthesis' in window) speechSynthesis.cancel();
+      let rec; try{ rec=new SR(); }catch(e){ return self(); }
+      rec.lang='en-US'; rec.interimResults=false; rec.maxAlternatives=5;
+      mic.disabled=true; mic.querySelector('span').textContent='Te escucho…';
+      rec.onresult=e=>{ const heard=[...e.results[0]].map(a=>a.transcript); const ok=heard.some(a=>checkNumber(it,a)); tries++;
+        const said = `Se entendió: “${esc(heard[0])}”.`;
+        if(ok){ done(); res.innerHTML = `<p class="inline-msg ok">${ic('check',16)}<span>${said}</span></p>` + model(); finish(true, 'Dijiste el número correcto. Compáralo con la forma recomendada.', heard[0], it.say); }
+        else if(tries<2){ res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${said} No coincide; inténtalo otra vez.</span></p>`; }
+        else { done(); res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${said}</span></p>` + model(); finish(false, `Se dice: <b>${esc(it.say)}</b>.`, heard[0], it.say); } };
+      rec.onerror=e=>{ const m = e.error==='not-allowed'||e.error==='service-not-allowed' ? 'Permite el uso del micrófono, o usa "Ver cómo se dice".' : e.error==='no-speech' ? 'No se escuchó nada. Inténtalo otra vez.' : e.error==='network' ? 'El reconocimiento de voz necesita internet. Usa "Ver cómo se dice".' : 'No se pudo usar el micrófono ('+esc(e.error)+'). Usa "Ver cómo se dice".';
+        res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${m}</span></p>`; };
+      rec.onend=()=>{ if(mic.isConnected){ mic.disabled=false; mic.querySelector('span').textContent='Decirlo'; } };
+      try{ rec.start(); }catch(e){ self(); }
+    };
   }
   if(q.kind==='match'){
     const pairOf = a => q.pairs.find(p=>p.a===a);
@@ -3022,6 +3246,7 @@ document.addEventListener('keydown', e=>{
   if(!SESSION.answered && /^[1-4a-dA-D]$/.test(e.key)){ const k = /\d/.test(e.key) ? +e.key-1 : 'abcd'.indexOf(e.key.toLowerCase()); const o=$$('.opt[data-o]')[k]; if(o){ e.preventDefault(); o.click(); } }
 });
 function reviewLine(q){
+  if(q.num) return `${esc(q.num.show)} → <b>${esc(q.num.say)}</b>`;
   if(q.kind==='match') return 'Emparejar palabras';
   if(q.kind==='err') return esc(q.correct);
   if(q.kind==='order' || q.kind==='listen') return esc(q.say);
@@ -3175,7 +3400,9 @@ function vVerbs(){
   app.innerHTML = `<div class="wrap page">${pageHead('Verbos','Irregulares en sus tres formas y regulares con la pronunciación de <i>-ed</i>.')}
   <section class="block"><div class="block-head"><h2>Verbos del día</h2>${B(day().tasks.verbs?'Repetir el quiz':'Quiz del día','target','primary sm','data-act="verbs"')}</div>
     <div class="vday">${dv.map(v=>`<div class="vday-i"><div class="row between"><b>${v.b}</b>${spk(v.b+', '+v.p+', '+v.pp)}</div><span class="forms">${esc(v.p)} <i>·</i> ${esc(v.pp)}</span><small class="muted">${esc(v.es)}</small></div>`).join('')}</div></section>
-  <section class="block"><div class="modes">${mode('qPast','left','Pasado','go → went')}${mode('qPP','check','Participio','go → gone')}${mode('qMix','grid','Mixto','Formas y significado')}${mode('qEd','headphones','Sonido de -ed','/t/, /d/ o /ɪd/')}</div></section>
+  <section class="block"><div class="modes">${mode('qPast','left','Pasado','go → went')}${mode('qPP','check','Participio','go → gone')}${mode('qMix','grid','Mixto','Formas y significado')}${mode('qEd','headphones','Sonido de -ed','/t/, /d/ o /ɪd/')}${mode('qLet','letter','Por letra','Elige una letra')}</div>
+    <div id="letPanel" class="letters-panel ${S.verbLetOpen?'':'hidden'}"><p class="small muted">Elige una letra: practicarás solo los verbos irregulares que empiezan con ella${f==='1'||f==='2'?` (filtro AEF ${f})`:''}.</p>
+      <div class="letters">${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(L=>{ const n=(f==='1'||f==='2'?VERBS.filter(v=>String(v.lvl)===f):VERBS).filter(v=>v.b[0].toUpperCase()===L).length; return `<button class="letter ${S.verbLetter===L?'on':''}" data-letter="${L}" ${n?'':'disabled'} title="${n} verbo(s)"><b>${L}</b><small>${n||''}</small></button>`; }).join('')}</div></div></section>
   <section class="block">
     <div class="block-head"><h2>Lista completa</h2><div class="seg">${[['all','Todos'],['1','AEF 1'],['2','AEF 2'],['reg','Regulares']].map(([k,l])=>`<button class="${f===k?'on':''}" data-vf="${k}">${l}</button>`).join('')}</div></div>
     <label class="search">${ic('search',18)}<input id="vq" type="search" placeholder="Buscar un verbo" value="${esc(S.verbQ||'')}" aria-label="Buscar verbo"></label>
@@ -3198,6 +3425,12 @@ function vVerbs(){
   $('#qPP').onclick=()=>startQuiz(shuffle(pool()).slice(0,10).map(v=>qVerb(v,freeRng,pick(['pp','mcpp']))),{title:'Quiz de participios'});
   $('#qMix').onclick=()=>startQuiz(shuffle(pool()).slice(0,12).map(v=>qVerb(v)),{title:'Quiz mixto de verbos'});
   $('#qEd').onclick=()=>startQuiz(shuffle(REGS).slice(0,10).map(v=>qEd(v)),{title:'Sonido de -ed'});
+  $('#qLet').onclick=()=>{ S.verbLetOpen=!S.verbLetOpen; save(); $('#letPanel').classList.toggle('hidden', !S.verbLetOpen); if(S.verbLetOpen) $('#letPanel').scrollIntoView({block:'nearest'}); };
+  $$('[data-letter]').forEach(b=>b.onclick=()=>{ const L=b.dataset.letter; S.verbLetter=L; save();
+    const vs = pool().filter(v=>v.b[0].toUpperCase()===L);
+    const chosen = pickMany(vs, 6, freeRng, verbOptions(hist(), {}));          // hasta 6 verbos (primero los no practicados), 2 preguntas cada uno
+    const qs=[]; chosen.forEach(v=>{ qs.push(qVerb(v,freeRng,'past')); qs.push(qVerb(v,freeRng,pick(['pp','mcpp','meaning']))); });
+    startQuiz(shuffle(qs).slice(0,12), {title:`Verbos con ${L}`}); });
 }
 
 /* ================== GRAMÁTICA ================== */
@@ -3329,7 +3562,7 @@ function renderLog(){
   const list = S.ev.filter(e=>!e.task && !e.ok && e.day>=from && (typ==='all' || keyKind(e.k)===typ)).sort((a,b)=>b.t-a.t);
   const seg = (attr, cur, opts) => `<div class="seg">${opts.map(([k,l])=>`<button class="${cur===k?'on':''}" ${attr}="${k}">${l}</button>`).join('')}</div>`;
   $('#logPanel').innerHTML = `<div class="panel-head"><h3>Registro de errores</h3><span class="muted small">${list.length} en el periodo</span></div>
-    <div class="row filters">${seg('data-per',per,[['7','7 días'],['30','30 días'],['all','Todo']])}${seg('data-typ',typ,[['all','Todo'],['grammar','Gramática'],['vocab','Vocabulario'],['verbs','Verbos']])}</div>
+    <div class="row filters">${seg('data-per',per,[['7','7 días'],['30','30 días'],['all','Todo']])}${seg('data-typ',typ,[['all','Todo'],['grammar','Gramática'],['vocab','Vocabulario'],['verbs','Verbos'],['numbers','Números']])}</div>
     ${list.length?`<ul class="log">${list.slice(0,lim).map(e=>`<li><time>${fmtTime(e.t)}</time><span class="log-k">${esc(keyLabel(e.k))}</span>
       <span class="log-a">${e.g?`<s class="bad-txt">${esc(e.g)}</s>`:'<span class="muted">sin respuesta</span>'}${e.x?` ${ic('right',14)} <b>${esc(e.x)}</b>`:''}</span></li>`).join('')}</ul>
       ${list.length>lim?B('Ver más','plus','ghost sm','id="logMore"'):''}${B('Practicar estos','target','primary sm','id="logPrac"')}`

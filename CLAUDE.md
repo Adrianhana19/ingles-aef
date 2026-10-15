@@ -38,6 +38,7 @@ node test2.js         # valida los trabalenguas y los idioms, y prueba checkEs()
 node test3.js         # prueba el registro de eventos: fusión entre dispositivos, migración, compactación e importación
 node test4.js         # prueba la elección de voz (pickVoice) con listas simuladas, incluida la de la Mac del usuario
 node test5.js         # prueba el dominio y simula 30 días de reto: 70% nuevo, repaso espaciado, lo dominado casi no sale
+node test6.js         # prueba el generador de números (formas de decir y corrección) y el conteo de verbos por letra
 node imgs.js          # consulta Wikipedia y lista las palabras sin foto (necesita red)
 ./deploy.sh "mensaje" # build + pruebas + commit + push; Pages tarda 1–2 min en actualizar
 ```
@@ -70,7 +71,7 @@ Notas sobre las pruebas:
 
 **Construcción.** `build.py` concatena en este orden:
 - Datos, como constantes globales: `grammar1.js → grammar2.js → vocab.js → verbs.js → extras.js`.
-- Módulos, dentro de una sola IIFE y compartiendo ámbito: `icons.js → core.js → store.js → views.js`.
+- Módulos, dentro de una sola IIFE y compartiendo ámbito: `icons.js → core.js → numbers.js → store.js → views.js`.
 
 Ese orden importa:
 - `core.js` usa `ic()` de `icons.js`.
@@ -142,6 +143,20 @@ Archivos aparte de la IIFE:
 - **Errores pendientes:** van aparte. Hasta 3 al inicio del reto, por decisión del usuario.
 - **Dónde se aplica:** `buildDaily`, `dailyVerbs`, `dailyWords` (unas 7 nuevas y 3 de repaso), `topicOfDay` y los modos de Ejercicios (`pickGrammar` y `pickMany`). "Practicar este tema" muestra primero lo no visto.
 
+**Números (`numbers.js`, bloque `NUM` con funciones puras).**
+- `makeNum(tipo, valor)` describe un número: `show` (cómo se ve), `say` (la forma recomendada, la que se muestra y suena), `alts` (todas las formas aceptadas, en palabras y en cifras) y `rule` (la regla en español).
+  - Tipos: `card` (cantidades), `ord`, `year` (en dos partes: nineteen ninety-eight / nineteen oh five / two thousand five / twenty twenty-six), `date` (formato de EE. UU., mes primero), `time` y `price`.
+  - El usuario no quiso teléfonos.
+- **Corrección:** `checkNumber()` compara con `normNum()`, que ignora "and", "the", "of", "dollars", los sufijos de ordinales, etc.
+  - El micrófono reconoce *qué* número se dijo, no *cómo*. Por eso, después siempre se muestra y se escucha la forma recomendada.
+- **Sesión** (`buildNumberSession`): 10 preguntas, 7 orales (tipo `say`) y 3 escritas (escuchar y escribir en cifras, o escribir en palabras).
+  - Da más peso a los tipos que más falla el usuario.
+  - **La pregunta oral** usa `webkitSpeechRecognition` (`SR`). Si no está disponible, el usuario se autoevalúa.
+- **Claves:** `n:<tipo>:<valor>`. `qFromKey` las regenera como pregunta escrita para "Mis errores". El reto diario no las toma como errores iniciales.
+- La tarjeta **"Números del día"** en Hoy (cuadrícula `g2x2`) muestra la fecha de hoy y 3 ejemplos. También hay un modo "Números" en Ejercicios.
+
+**Verbos por letra** (`vVerbs`, modo "Por letra"): solo irregulares (decisión del usuario). Elige hasta 6 verbos de la letra con `pickMany` (primero los no practicados) y hace 2 preguntas por verbo, como el modo Mixto. Respeta el filtro AEF 1 / AEF 2.
+
 **Variedad diaria determinista.**
 - `makeRng(semilla)` es un PRNG con semilla, y las semillas incluyen `TODAY`.
 - `snap()` congela los errores pendientes y las cajas de flashcards al inicio del día, así el reto no cambia ese día.
@@ -149,8 +164,8 @@ Archivos aparte de la IIFE:
 
 **Preguntas y vistas.**
 - Los generadores `qFromItem`, `qVocab`, `qVerb`, `qEd`, `qIdiom` y `qMatch` devuelven objetos con:
-  - `kind`: `mc`|`type`|`listen`|`order`|`err`|`match`
-  - `key`: con la forma `topicId#idx`, `w:grupo:palabra`, `v:verbo` o `r:verbo`. `qFromKey()` regenera la pregunta a partir de ella.
+  - `kind`: `mc`|`type`|`listen`|`order`|`err`|`match`|`say` (oral, solo números)
+  - `key`: con la forma `topicId#idx`, `w:grupo:palabra`, `v:verbo`, `r:verbo` o `n:tipo:valor`. `qFromKey()` regenera la pregunta a partir de ella.
 - **Rutas:** se navega por `location.hash` (`#hoy`, `#gramatica/2-1a`…), con una función `vXxx()` por vista.
 - **Modo lección:** el quiz y las flashcards activan `body.focus`, que oculta la navegación.
 
