@@ -59,6 +59,7 @@ Pasos que acepta `cdp.mjs`:
 - `offline` (emula sin red)
 - `reload` (recarga y espera los ms indicados)
 - `click` (`[x,y]`: clic real del ratón; sirve para probar la voz, que exige un gesto del usuario)
+- `inject` (script que se ejecuta antes de cargar la página; por ejemplo, un micrófono simulado)
 
 Notas sobre las pruebas:
 - `size` y `dark` se aplican **antes** de `nav`.
@@ -152,6 +153,10 @@ Archivos aparte de la IIFE:
 - **Sesión** (`buildNumberSession`): 10 preguntas, 7 orales (tipo `say`) y 3 escritas (escuchar y escribir en cifras, o escribir en palabras).
   - Da más peso a los tipos que más falla el usuario.
   - **La pregunta oral** usa `webkitSpeechRecognition` (`SR`). Si no está disponible, el usuario se autoevalúa.
+- **Micrófono (números y trabalenguas):** siempre a través de `micToggle()` en `views.js`, que funciona como interruptor.
+  - Primer toque: graba, y el botón se pone rojo con "Detener". Segundo toque: `stop()`. Se corta solo a los 8 s.
+  - `stopRec(true)` cancela la grabación en `route()`, `vQuiz()` y `vHome()`. Así nunca se queda grabando, que fue una queja del usuario.
+  - Se prueba con un `SpeechRecognition` falso inyectado con el paso `inject` de `cdp.mjs`.
 - **Claves:** `n:<tipo>:<valor>`. `qFromKey` las regenera como pregunta escrita para "Mis errores". El reto diario no las toma como errores iniciales.
 - La tarjeta **"Números del día"** en Hoy (cuadrícula `g2x2`) muestra la fecha de hoy y 3 ejemplos. También hay un modo "Números" en Ejercicios.
 

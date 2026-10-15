@@ -51,6 +51,7 @@ const ICONS = {
   minus:'<path d="M5 12h14"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',
   hash:'<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>',
   letter:'<path d="M3 19 8 5h1l5 14M5 14h7"/><circle cx="18" cy="16" r="3"/><path d="M21 13v6"/>',
   mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',

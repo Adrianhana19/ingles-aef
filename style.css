@@ -505,3 +505,9 @@ body.focus .toast{top:calc(70px + var(--safe-t));bottom:auto}
 .letter.on{background:var(--ink);color:var(--bg)} .letter.on small{color:var(--bg)}
 .letter:disabled{opacity:.3;cursor:not-allowed;border-style:dashed}
 @media (max-width:640px){ .num-big{font-size:2.5rem} }
+
+/* ---------- micrófono grabando ---------- */
+.btn.recording{background:var(--red)!important;color:#fff!important;border-color:var(--red)!important;position:relative;padding-left:30px}
+.btn.recording::before{content:"";position:absolute;left:12px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:#fff;animation:rec-pulse 1.1s ease-in-out infinite}
+@keyframes rec-pulse{0%,100%{opacity:1}50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){ .btn.recording::before{animation:none} }

@@ -73,6 +73,7 @@ function go(h){ if(location.hash==='#'+h) route(); else location.hash=h; }
 let SESSION=null;
 function updatePill(){ const s=streak(); $('#streakPill').innerHTML = `${ic('flame',16)}<b>${s}</b>`; $('#streakPill').title = `Racha: ${s} día(s) seguidos`; }
 function route(){
+  stopRec(true);
   if('speechSynthesis' in window) speechSynthesis.cancel();
   hideTip();
   const h = decodeURIComponent(location.hash.slice(1)) || 'hoy'; const [v, arg] = h.split('/');
@@ -94,6 +95,7 @@ function weekDots(){
     return `<span class="wd ${on?'on':''} ${today?'today':''} ${fut?'fut':''}" title="${fmtShort(d)}${on?': practicaste':''}"><i>${on?ic('check',12):''}</i>${l}</span>`; }).join('');
 }
 function vHome(){
+  stopRec(true);
   const d = day(), tasks = d.tasks||{}, s = streak();
   const hour = new Date().getHours(); const saludo = hour<12?'Buenos días':hour<19?'Buenas tardes':'Buenas noches';
   const curT = GRAMMAR.filter(t=>t.book===2 && t.file===S.settings.cur);
@@ -204,16 +206,32 @@ function startTopicQuiz(id, n=10){
   qs = qs.concat(shuffle(extra)).slice(0, n);
   startQuiz(qs, {title:`${unitLabel(t)} ${t.title}`, topic:id});
 }
-function tryTwister(tw){
-  const btn=$('#twMic'), res=$('#twRes'); let rec;
-  try{ rec=new SR(); }catch(e){ toast('Tu navegador no tiene reconocimiento de voz.'); return; }
-  rec.lang='en-US'; rec.interimResults=false; rec.maxAlternatives=4;
+/* micrófono como interruptor: primer toque graba, segundo toque detiene (y se detiene solo a los maxMs) */
+let REC = null;
+function stopRec(abort){ const r = REC; if(!r) return; try{ abort ? r.abort() : r.stop(); }catch(e){} if(abort) REC = null; }
+const MIC_ERR = {'not-allowed':'Permite el uso del micrófono para practicar.', 'service-not-allowed':'Permite el uso del micrófono para practicar.', 'no-speech':'No se escuchó nada. Toca el micrófono y habla.', 'network':'El reconocimiento de voz necesita internet.', 'audio-capture':'No se encontró un micrófono.'};
+function micToggle(btn, {label, onResult, onError, maxMs=8000}){
+  if(REC && REC._btn === btn){ stopRec(); return true; }          // segundo toque: detener
+  stopRec(true);
+  let rec; try{ rec = new SR(); }catch(e){ return false; }
+  REC = rec; rec._btn = btn; rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 5; rec.continuous = false;
   if('speechSynthesis' in window) speechSynthesis.cancel();
-  btn.disabled=true; btn.querySelector('span').textContent='Te escucho…'; res.innerHTML='';
-  rec.onresult=e=>scoreTwister(tw, [...e.results[0]].map(a=>a.transcript));
-  rec.onerror=e=>{ res.innerHTML=`<p class="inline-msg bad">${ic('alert',16)}<span>${e.error==='not-allowed'||e.error==='service-not-allowed'?'Permite el uso del micrófono para practicar.':e.error==='no-speech'?'No se escuchó nada. Inténtalo otra vez, un poco más fuerte.':e.error==='network'?'El reconocimiento de voz necesita internet.':'No se pudo usar el micrófono ('+esc(e.error)+').'}</span></p>`; };
-  rec.onend=()=>{ if(btn.isConnected){ btn.disabled=false; btn.querySelector('span').textContent='Intentarlo'; } };
-  try{ rec.start(); }catch(e){ rec.onend(); }
+  const idle = () => { btn.classList.remove('recording'); btn.innerHTML = ic('mic',18) + `<span>${label}</span>`; btn.title = ''; };
+  btn.classList.add('recording'); btn.innerHTML = ic('stop',18) + '<span>Detener</span>'; btn.title = 'Toca para detener la grabación';
+  let got = false;
+  const timer = setTimeout(() => { if(REC === rec) stopRec(); }, maxMs);
+  rec.onresult = e => { got = true; onResult([...e.results[0]].map(a => a.transcript)); };
+  rec.onerror = e => { if(e.error === 'aborted') return; got = true; onError(e.error, MIC_ERR[e.error] || 'No se pudo usar el micrófono (' + e.error + ').'); };
+  rec.onend = () => { clearTimeout(timer); if(REC === rec) REC = null; if(btn.isConnected){ idle(); if(!got) onError('no-speech', MIC_ERR['no-speech']); } };
+  try{ rec.start(); }catch(e){ clearTimeout(timer); REC = null; idle(); return false; }
+  return true;
+}
+function tryTwister(tw){
+  const btn=$('#twMic'), res=$('#twRes');
+  if(!REC) res.innerHTML='';
+  const ok = micToggle(btn, {label:'Intentarlo', onResult: alts => scoreTwister(tw, alts),
+    onError: (code, m) => { res.innerHTML=`<p class="inline-msg bad">${ic('alert',16)}<span>${esc(m)}</span></p>`; }});
+  if(!ok) toast('Tu navegador no tiene reconocimiento de voz.');
 }
 function scoreTwister(tw, alts){
   const orig = tw.t.split(' '); let best=null;
@@ -281,6 +299,7 @@ function lessonTop(i, n, res, exitId){
     <span class="count">${Math.min(i+1,n)} / ${n}</span></div></div>`;
 }
 function vQuiz(){
+  stopRec(true);
   if(!SESSION || SESSION.type!=='quiz'){ go('ejercicios'); return; }
   const Q=SESSION; if(Q.i>=Q.qs.length) return quizResult();
   const q=Q.qs[Q.i]; Q.answered=false;
@@ -378,19 +397,15 @@ function vQuiz(){
     $('#sayShow').onclick = self;
     const mic=$('#sayMic');
     if(mic) mic.onclick=()=>{
-      if(Q.answered) return; if('speechSynthesis' in window) speechSynthesis.cancel();
-      let rec; try{ rec=new SR(); }catch(e){ return self(); }
-      rec.lang='en-US'; rec.interimResults=false; rec.maxAlternatives=5;
-      mic.disabled=true; mic.querySelector('span').textContent='Te escucho…';
-      rec.onresult=e=>{ const heard=[...e.results[0]].map(a=>a.transcript); const ok=heard.some(a=>checkNumber(it,a)); tries++;
-        const said = `Se entendió: “${esc(heard[0])}”.`;
-        if(ok){ done(); res.innerHTML = `<p class="inline-msg ok">${ic('check',16)}<span>${said}</span></p>` + model(); finish(true, 'Dijiste el número correcto. Compáralo con la forma recomendada.', heard[0], it.say); }
-        else if(tries<2){ res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${said} No coincide; inténtalo otra vez.</span></p>`; }
-        else { done(); res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${said}</span></p>` + model(); finish(false, `Se dice: <b>${esc(it.say)}</b>.`, heard[0], it.say); } };
-      rec.onerror=e=>{ const m = e.error==='not-allowed'||e.error==='service-not-allowed' ? 'Permite el uso del micrófono, o usa "Ver cómo se dice".' : e.error==='no-speech' ? 'No se escuchó nada. Inténtalo otra vez.' : e.error==='network' ? 'El reconocimiento de voz necesita internet. Usa "Ver cómo se dice".' : 'No se pudo usar el micrófono ('+esc(e.error)+'). Usa "Ver cómo se dice".';
-        res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${m}</span></p>`; };
-      rec.onend=()=>{ if(mic.isConnected){ mic.disabled=false; mic.querySelector('span').textContent='Decirlo'; } };
-      try{ rec.start(); }catch(e){ self(); }
+      if(Q.answered) return;
+      const started = micToggle(mic, {label:'Decirlo',
+        onResult: heard => { if(Q.answered) return; const ok=heard.some(a=>checkNumber(it,a)); tries++;
+          const said = `Se entendió: “${esc(heard[0])}”.`;
+          if(ok){ done(); res.innerHTML = `<p class="inline-msg ok">${ic('check',16)}<span>${said}</span></p>` + model(); finish(true, 'Dijiste el número correcto. Compáralo con la forma recomendada.', heard[0], it.say); }
+          else if(tries<2){ res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${said} No coincide; toca el micrófono e inténtalo otra vez.</span></p>`; }
+          else { done(); res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${said}</span></p>` + model(); finish(false, `Se dice: <b>${esc(it.say)}</b>.`, heard[0], it.say); } },
+        onError: (code, m) => { if(Q.answered) return; res.innerHTML = `<p class="inline-msg bad">${ic('alert',16)}<span>${esc(m)}${code==='no-speech'?'':' También puedes usar "Ver cómo se dice".'}</span></p>`; } });
+      if(!started) self();
     };
   }
   if(q.kind==='match'){

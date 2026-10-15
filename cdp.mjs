@@ -20,6 +20,7 @@ fs.mkdirSync('shots',{recursive:true});
 const steps=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 await setSize(1280,900);
 for(const s of steps){
+  if(s.inject) await send('Page.addScriptToEvaluateOnNewDocument',{source:s.inject});
   if(s.size) await setSize(...s.size);
   if(s.dark!==undefined) await dark(s.dark);
   if(s.nav){ await send('Page.navigate',{url:s.nav}); await sleep(s.wait||1500); }
